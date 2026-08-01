@@ -74,8 +74,12 @@ export interface Candidate {
   gtin: string | null;
   model_number: string | null;
   mpn: string | null;
+  image_url: string | null;
+  source_provider: string | null;
+  source_merchant_domain: string | null;
   identity_score: number;
-  classification: "exact_verified" | "likely_exact" | "similar" | "rejected";
+  classification:
+    "exact_verified" | "likely_exact" | "similar" | "incompatible" | "rejected";
   matched_evidence: Array<{
     field: string;
     observed: string;

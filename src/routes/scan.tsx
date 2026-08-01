@@ -74,6 +74,7 @@ function AuthenticatedScanDesk() {
     stage,
     scan,
     candidate,
+    candidates,
     offers,
     selectedOffer,
     paymentSession,
@@ -97,7 +98,13 @@ function AuthenticatedScanDesk() {
           />
         )}
         {stage === "ambiguous" && scan && (
-          <AmbiguousPanel scan={scan} onReset={actions.reset} />
+          <AmbiguousPanel
+            scan={scan}
+            candidates={candidates}
+            onConfirm={(productId) => void actions.confirmCandidate(productId)}
+            onEvidence={(file) => void actions.addEvidence(file)}
+            onReset={actions.reset}
+          />
         )}
         {stage === "result" && scan && candidate && (
           <ResultPanel
@@ -106,6 +113,7 @@ function AuthenticatedScanDesk() {
             offers={offers}
             offer={selectedOffer}
             onGet={() => void actions.requestAuthority()}
+            onSelectOffer={actions.selectOffer}
             onReject={actions.reset}
           />
         )}

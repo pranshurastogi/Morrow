@@ -100,12 +100,20 @@ export async function createPurchaseIntent(
   return sql.begin(async (transaction) => {
     const [source] = await transaction`
       select o.*, s.user_id, cp.brand, cp.name, cp.variant, cp.size_value, cp.size_unit,
-        cp.gtin, cp.model_number, cp.mpn
+        cp.gtin, cp.model_number, cp.mpn, sc.classification,
+        exists (
+          select 1 from user_product_confirmations upc
+          where upc.user_id = s.user_id and upc.scan_id = s.id
+            and upc.product_id = o.canonical_product_id
+        ) as user_confirmed
       from offers o
       join scans s on s.id = o.scan_id
       join canonical_products cp on cp.id = o.canonical_product_id
+      join scan_candidates sc on sc.scan_id = s.id
+        and sc.product_id = o.canonical_product_id
       where o.id = ${input.offerId} and o.scan_id = ${input.scanId}
         and o.canonical_product_id = ${input.productId} and s.user_id = ${input.userId}
+        and s.selected_product_id = ${input.productId} and s.status = 'OFFERS_READY'
       for update
     `;
     if (!source)
@@ -125,6 +133,13 @@ export async function createPurchaseIntent(
       throw new MorrowError({
         code: "MORE_EVIDENCE_REQUIRED",
         message: "The merchant variant is not verified for purchase",
+        statusCode: 409,
+      });
+    }
+    if (source.classification !== "exact_verified" && !source.user_confirmed) {
+      throw new MorrowError({
+        code: "MORE_EVIDENCE_REQUIRED",
+        message: "Confirm the proposed product before approving a purchase",
         statusCode: 409,
       });
     }

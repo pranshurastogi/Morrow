@@ -10,6 +10,7 @@ import {
 } from "../../domain/scan-status";
 import { getDatabase } from "./client";
 import { databaseJson } from "./json";
+import { assertCandidateMayBeConfirmed } from "../../modules/matching/confirmation-policy";
 
 export interface ScanRecord {
   id: string;
@@ -292,6 +293,77 @@ export async function getScanImages(
         : String(row.thumbnail_object_key),
     sha256: row.sha256 === null ? null : String(row.sha256),
   }));
+}
+
+export async function confirmScanProduct(
+  input: { scanId: string; productId: string; userId: string },
+  sql: Sql = getDatabase(),
+): Promise<ScanRecord> {
+  return sql.begin(async (transaction) => {
+    const [row] = await transaction`
+      select s.*, sc.classification, sc.contradictions
+      from scans s
+      join scan_candidates sc on sc.scan_id = s.id
+        and sc.product_id = ${input.productId}
+      where s.id = ${input.scanId} and s.user_id = ${input.userId}
+      for update
+    `;
+    if (!row) {
+      throw new MorrowError({
+        code: "NOT_FOUND",
+        message: "Candidate product not found for this inspection",
+        statusCode: 404,
+      });
+    }
+    const contradictions = Array.isArray(row.contradictions)
+      ? (row.contradictions as Array<{ fatal?: boolean }>)
+      : [];
+    assertCandidateMayBeConfirmed({
+      scanStatus: row.status as ScanStatus,
+      classification: row.classification as
+        | "exact_verified"
+        | "likely_exact"
+        | "similar"
+        | "incompatible"
+        | "rejected",
+      contradictions,
+    });
+    await transaction`
+      insert into user_product_confirmations (
+        user_id, product_id, scan_id, confirmation_type
+      ) values (
+        ${input.userId}, ${input.productId}, ${input.scanId},
+        ${row.classification === "likely_exact" ? "user_confirmed_likely_match" : "user_selected_alternative"}
+      ) on conflict (user_id, scan_id, product_id) where scan_id is not null
+      do update set confirmation_type = excluded.confirmation_type, created_at = now()
+    `;
+    const [updated] = await transaction`
+      update scans set status = 'SEARCHING_MERCHANTS',
+        selected_product_id = ${input.productId}, next_capture = null,
+        error_code = null, error_message = null, version = version + 1
+      where id = ${input.scanId} and version = ${row.version}
+      returning *
+    `;
+    if (!updated) {
+      throw new MorrowError({
+        code: "INTERNAL_ERROR",
+        message: "Concurrent inspection update",
+        statusCode: 409,
+      });
+    }
+    await transaction`
+      insert into audit_events (
+        user_id, entity_type, entity_id, event_type, actor_type, actor_id, payload
+      ) values (
+        ${input.userId}, 'scan', ${input.scanId}, 'USER_CONFIRMED_PRODUCT',
+        'user', ${input.userId}, ${transaction.json({
+          productId: input.productId,
+          classification: row.classification,
+        })}
+      )
+    `;
+    return mapScan(updated);
+  });
 }
 
 export async function transitionScan(

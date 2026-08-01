@@ -5,6 +5,7 @@ import { frontendOrigins, getEnvironment } from "../../../config/env";
 import {
   createScan,
   addScanImages,
+  confirmScanProduct,
   getEvidence,
   getScanForUser,
   getUploadsForUser,
@@ -163,6 +164,18 @@ export const scanRoutes: FastifyPluginAsync = async (app) => {
         request.principal.userId,
       ),
     };
+  });
+
+  app.post("/scans/:scanId/confirm-product", async (request, reply) => {
+    const params = idParamsSchema.parse(request.params);
+    const body = z.object({ productId: z.uuid() }).parse(request.body);
+    const scan = await confirmScanProduct({
+      scanId: params.scanId,
+      productId: body.productId,
+      userId: request.principal.userId,
+    });
+    await enqueueScan(scan.id, scan.version);
+    return reply.code(202).send({ scanId: scan.id, status: scan.status });
   });
 
   app.post("/scans/:scanId/retry", async (request, reply) => {

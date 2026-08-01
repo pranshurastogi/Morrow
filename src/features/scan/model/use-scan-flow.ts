@@ -5,6 +5,7 @@ import {
   createPaymentSession,
   createPurchaseIntent,
   createScanFromFile,
+  confirmProduct,
   getCandidates,
   getOffers,
   getPaymentStatus,
@@ -36,6 +37,7 @@ interface State {
   stage: ScanStage;
   scan: ScanRecord | null;
   candidate: Candidate | null;
+  candidates: Candidate[];
   offers: Offer[];
   selectedOffer: Offer | null;
   purchaseIntentId: string | null;
@@ -54,7 +56,9 @@ type Action =
       offers: Offer[];
       selectedOffer: Offer | null;
     }
+  | { type: "review"; scan: ScanRecord; candidates: Candidate[] }
   | { type: "intent"; purchaseIntentId: string }
+  | { type: "select-offer"; offer: Offer }
   | { type: "payment"; session: EmbeddedPaymentSession }
   | { type: "payment-result"; result: PublicPaymentResult; stage: ScanStage }
   | { type: "error"; error: unknown }
@@ -64,6 +68,7 @@ const initialState: State = {
   stage: "idle",
   scan: null,
   candidate: null,
+  candidates: [],
   offers: [],
   selectedOffer: null,
   purchaseIntentId: null,
@@ -110,8 +115,21 @@ function reducer(state: State, action: Action): State {
         stage: "result",
         scan: action.scan,
         candidate: action.candidate,
+        candidates: [action.candidate],
         offers: action.offers,
         selectedOffer: action.selectedOffer,
+        error: null,
+      };
+    case "review":
+      return {
+        ...state,
+        stage: "ambiguous",
+        scan: action.scan,
+        candidates: action.candidates,
+        candidate:
+          action.candidates.find(
+            (candidate) => candidate.id === action.scan.selectedProductId,
+          ) ?? null,
         error: null,
       };
     case "intent":
@@ -120,6 +138,8 @@ function reducer(state: State, action: Action): State {
         stage: "authority",
         purchaseIntentId: action.purchaseIntentId,
       };
+    case "select-offer":
+      return { ...state, selectedOffer: action.offer };
     case "payment":
       return { ...state, stage: "payment", paymentSession: action.session };
     case "payment-result":
@@ -176,6 +196,26 @@ export function useScanFlow() {
     });
   }, []);
 
+  const hydrateReview = useCallback(async (scan: ScanRecord) => {
+    const response = await getCandidates(scan.id);
+    const candidates = response.candidates
+      .filter(
+        (candidate) =>
+          candidate.classification === "likely_exact" ||
+          candidate.classification === "similar",
+      )
+      .slice(0, 4);
+    if (candidates.length === 0) {
+      throw Object.assign(
+        new Error(
+          "The current evidence does not support a safe product choice.",
+        ),
+        { code: "MORE_EVIDENCE_REQUIRED" },
+      );
+    }
+    dispatch({ type: "review", scan, candidates });
+  }, []);
+
   const followScan = useCallback(
     async (scanId: string) => {
       streamAbort.current?.abort();
@@ -189,11 +229,17 @@ export function useScanFlow() {
         });
         const settled: ScanRecord = latest ?? (await getScan(scanId));
         if (settled.status === "OFFERS_READY") await hydrateResult(settled);
+        if (
+          settled.status === "SIMILAR_FOUND" ||
+          settled.status === "AMBIGUOUS"
+        ) {
+          await hydrateReview(settled);
+        }
       } catch (error) {
         if (!controller.signal.aborted) dispatch({ type: "error", error });
       }
     },
-    [hydrateResult],
+    [hydrateResult, hydrateReview],
   );
 
   const startScan = useCallback(
@@ -245,6 +291,20 @@ export function useScanFlow() {
       dispatch({ type: "error", error });
     }
   }, [state.scan, state.selectedOffer]);
+
+  const confirmCandidate = useCallback(
+    async (productId: string) => {
+      if (!state.scan) return;
+      try {
+        await confirmProduct(state.scan.id, productId);
+        dispatch({ type: "stage", stage: "inspecting" });
+        await followScan(state.scan.id);
+      } catch (error) {
+        dispatch({ type: "error", error });
+      }
+    },
+    [followScan, state.scan],
+  );
 
   const approveWithPrava = useCallback(async () => {
     if (!state.purchaseIntentId) return;
@@ -310,6 +370,8 @@ export function useScanFlow() {
     actions: {
       startScan,
       addEvidence,
+      confirmCandidate,
+      selectOffer: (offer: Offer) => dispatch({ type: "select-offer", offer }),
       requestAuthority,
       approveWithPrava,
       pollPayment,

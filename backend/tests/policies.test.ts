@@ -16,6 +16,7 @@ import {
   normalizeIdentifier,
   sizesEquivalent,
 } from "../src/modules/recognition/normalization";
+import { assertCandidateMayBeConfirmed } from "../src/modules/matching/confirmation-policy";
 
 describe("deterministic policies", () => {
   test("normalizes identifiers without inventing barcode digits", () => {
@@ -47,9 +48,29 @@ describe("deterministic policies", () => {
 
   test("enforces the scan state machine", () => {
     expect(canTransitionScan("IMAGE_UPLOADED", "PREPROCESSING")).toBeTrue();
+    expect(
+      canTransitionScan("SIMILAR_FOUND", "SEARCHING_MERCHANTS"),
+    ).toBeTrue();
     expect(() =>
       assertScanTransition("IMAGE_UPLOADED", "ORDER_COMPLETED"),
     ).toThrow();
+  });
+
+  test("requires a non-contradictory explicit candidate choice", () => {
+    expect(() =>
+      assertCandidateMayBeConfirmed({
+        scanStatus: "SIMILAR_FOUND",
+        classification: "likely_exact",
+        contradictions: [],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertCandidateMayBeConfirmed({
+        scanStatus: "AMBIGUOUS",
+        classification: "similar",
+        contradictions: [{ fatal: true }],
+      }),
+    ).toThrow(MorrowError);
   });
 
   test("redacts nested payment material", () => {

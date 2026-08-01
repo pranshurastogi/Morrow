@@ -93,6 +93,16 @@ export function getCandidates(
   return apiRequest(`/scans/${scanId}/candidates`);
 }
 
+export function confirmProduct(scanId: string, productId: string) {
+  return apiRequest<{ scanId: string; status: ScanRecord["status"] }>(
+    `/scans/${scanId}/confirm-product`,
+    {
+      method: "POST",
+      body: JSON.stringify({ productId }),
+    },
+  );
+}
+
 export function getOffers(
   scanId: string,
   productId: string,
