@@ -41,7 +41,13 @@ export function StatusStamp({
 
 /* ---------------------------------- labels --------------------------------- */
 
-export function VintageLabel({ children, className }: { children: ReactNode; className?: string }) {
+export function VintageLabel({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <span
       className={cn(
@@ -54,7 +60,13 @@ export function VintageLabel({ children, className }: { children: ReactNode; cla
   );
 }
 
-export function SectionKicker({ index, children }: { index?: string; children: ReactNode }) {
+export function SectionKicker({
+  index,
+  children,
+}: {
+  index?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex items-center gap-3">
       {index ? <span className="mono-caps text-brass">{index}</span> : null}
@@ -73,7 +85,9 @@ export function Plate({
   className?: string;
   as?: "div" | "li" | "article" | "section";
 }) {
-  return <Tag className={cn("plate rounded-sm bg-card", className)}>{children}</Tag>;
+  return (
+    <Tag className={cn("plate rounded-sm bg-card", className)}>{children}</Tag>
+  );
 }
 
 /* --------------------------------- ledger ---------------------------------- */
@@ -86,10 +100,17 @@ export function EvidenceLedger({
   className?: string;
 }) {
   return (
-    <ul className={cn("divide-y divide-border border-y border-border", className)}>
+    <ul
+      className={cn("divide-y divide-border border-y border-border", className)}
+    >
       {items.map((item) => (
-        <li key={item.label} className="flex items-center justify-between gap-3 py-2">
-          <span className="min-w-0 truncate font-mono text-xs text-foreground">{item.label}</span>
+        <li
+          key={item.label}
+          className="flex items-center justify-between gap-3 py-2"
+        >
+          <span className="min-w-0 truncate font-mono text-xs text-foreground">
+            {item.label}
+          </span>
           <span
             className={cn(
               "shrink-0 mono-caps",
@@ -112,7 +133,13 @@ export function EvidenceLedger({
 
 /* -------------------------------- scan dial -------------------------------- */
 
-export function ProcessingDial({ label, className }: { label?: string; className?: string }) {
+export function ProcessingDial({
+  label,
+  className,
+}: {
+  label?: string;
+  className?: string;
+}) {
   return (
     <div className={cn("flex flex-col items-center gap-3", className)}>
       <div className="relative grid h-24 w-24 place-items-center rounded-full border border-brass/70">
@@ -121,7 +148,9 @@ export function ProcessingDial({ label, className }: { label?: string; className
         <div className="h-10 w-10 rounded-full border-2 border-primary/80 bg-primary/5" />
         <div className="absolute top-1 h-3 w-px bg-postal" />
       </div>
-      {label ? <p className="mono-caps text-muted-foreground">{label}</p> : null}
+      {label ? (
+        <p className="mono-caps text-muted-foreground">{label}</p>
+      ) : null}
     </div>
   );
 }
@@ -129,5 +158,9 @@ export function ProcessingDial({ label, className }: { label?: string; className
 /* ------------------------------ archival number ---------------------------- */
 
 export function ArchiveNumber({ value }: { value: string }) {
-  return <span className="font-mono text-[11px] tracking-[0.18em] text-brass">{value}</span>;
+  return (
+    <span className="font-mono text-[11px] tracking-[0.18em] text-brass">
+      {value}
+    </span>
+  );
 }

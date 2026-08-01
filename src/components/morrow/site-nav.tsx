@@ -23,10 +23,18 @@ export function SiteNav() {
           aria-label="Morrow home"
         >
           <span className="brand-seal grid h-10 w-10 shrink-0 place-items-center rounded-full border border-brass/50 bg-ivory">
-            <img src={seal} alt="" width={816} height={816} className="h-9 w-9" />
+            <img
+              src={seal}
+              alt=""
+              width={816}
+              height={816}
+              className="h-9 w-9"
+            />
           </span>
           <span className="min-w-0">
-            <span className="block truncate font-display text-[1.35rem] leading-none">Morrow</span>
+            <span className="block truncate font-display text-[1.35rem] leading-none">
+              Morrow
+            </span>
             <span className="mt-1 hidden mono-caps text-muted-foreground sm:block">
               Mercantile Co. · Est. 1900
             </span>
@@ -49,20 +57,35 @@ export function SiteNav() {
         </nav>
 
         <div className="flex items-center justify-self-end gap-2">
-          <Button size="sm" className="morrow-invite min-h-10 px-3 sm:px-4" asChild>
+          <Button
+            size="sm"
+            className="morrow-invite min-h-10 px-3 sm:px-4"
+            asChild
+          >
             <Link to="/scan">
               <ScanLine className="morrow-invite-scan h-4 w-4" aria-hidden />
               <span>Open Morrow</span>
-              <ArrowUpRight className="hidden h-3.5 w-3.5 sm:block" aria-hidden />
+              <ArrowUpRight
+                className="hidden h-3.5 w-3.5 sm:block"
+                aria-hidden
+              />
             </Link>
           </Button>
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open menu">
+              <Button
+                variant="outline"
+                size="icon"
+                className="lg:hidden"
+                aria-label="Open menu"
+              >
                 <Menu className="h-4 w-4" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[84vw] max-w-xs bg-card p-0">
+            <SheetContent
+              side="right"
+              className="w-[84vw] max-w-xs bg-card p-0"
+            >
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <span className="font-display text-lg">Index</span>
                 <Button
@@ -92,7 +115,10 @@ export function SiteNav() {
               <div className="p-4">
                 <Button className="morrow-invite min-h-11 w-full" asChild>
                   <Link to="/scan" onClick={() => setOpen(false)}>
-                    <ScanLine className="morrow-invite-scan h-4 w-4" aria-hidden />
+                    <ScanLine
+                      className="morrow-invite-scan h-4 w-4"
+                      aria-hidden
+                    />
                     Open Morrow
                     <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
                   </Link>
