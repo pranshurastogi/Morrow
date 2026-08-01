@@ -1,3 +1,4 @@
+import { ClerkLoading, Show, UserButton } from "@clerk/tanstack-react-start";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
 import { ArchiveNumber } from "@/components/morrow/bits";
@@ -15,7 +16,24 @@ export function ScanHeader() {
         <p className="truncate font-display text-lg leading-none">Morrow</p>
         <p className="mono-caps text-muted-foreground">Object desk</p>
       </div>
-      <ArchiveNumber value="1842" />
+      <div className="flex h-11 w-11 items-center justify-center">
+        <ClerkLoading>
+          <ArchiveNumber value="1842" />
+        </ClerkLoading>
+        <Show when="signed-out">
+          <ArchiveNumber value="1842" />
+        </Show>
+        <Show when="signed-in">
+          <UserButton
+            appearance={{
+              elements: {
+                userButtonTrigger: "h-11 w-11 focus-visible:outline-none",
+                userButtonAvatarBox: "h-9 w-9",
+              },
+            }}
+          />
+        </Show>
+      </div>
     </header>
   );
 }

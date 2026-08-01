@@ -3,6 +3,7 @@ import {
   createCsrfMiddleware,
   createMiddleware,
 } from "@tanstack/react-start";
+import { clerkMiddleware } from "@clerk/tanstack-react-start/server";
 
 import { renderErrorPage } from "./lib/error-page";
 
@@ -29,5 +30,5 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [errorMiddleware, csrfMiddleware],
+  requestMiddleware: [errorMiddleware, clerkMiddleware(), csrfMiddleware],
 }));

@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ClerkProvider } from "@clerk/tanstack-react-start";
 import {
   Outlet,
   Link,
@@ -10,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { ClerkSessionBridge } from "@/features/auth/clerk-session-bridge";
 import appCss from "../styles.css?url";
 function NotFoundComponent() {
   return (
@@ -134,7 +136,10 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        <ClerkProvider>
+          <ClerkSessionBridge />
+          {children}
+        </ClerkProvider>
         <Scripts />
       </body>
     </html>

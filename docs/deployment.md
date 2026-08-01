@@ -6,7 +6,21 @@
 2. Vercel reads `vercel.json`, installs with Bun, and runs `bun run build:vercel`.
 3. Set `VITE_API_BASE_URL` to the Railway API HTTPS origin.
 4. Set the rotated `VITE_PRAVA_PUBLISHABLE_KEY`.
-5. Add the Vercel production and preview origins to `FRONTEND_ORIGINS` on Railway.
+5. Set `VITE_CLERK_PUBLISHABLE_KEY` and the server-only `CLERK_SECRET_KEY`.
+6. Add the Vercel production and preview origins to `FRONTEND_ORIGINS` on Railway.
+
+In Clerk, open **Sessions → Customize session token** and add the user's
+primary email for the Prava purchase-session boundary:
+
+```json
+{
+  "email": "{{user.primary_email_address}}"
+}
+```
+
+On Railway, set Clerk's Frontend API origin as `AUTH_ISSUER` and its
+`/.well-known/jwks.json` URL as `AUTH_JWKS_URL`. Leave `AUTH_AUDIENCE` unset
+unless a custom Clerk token template intentionally adds an audience claim.
 
 ## Backend on Railway
 

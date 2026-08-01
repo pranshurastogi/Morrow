@@ -80,6 +80,9 @@ The web app needs:
 
 - `VITE_API_BASE_URL`: Railway API URL (or `http://localhost:3001`).
 - `VITE_PRAVA_PUBLISHABLE_KEY`: Prava publishable key; safe for the browser.
+- `VITE_CLERK_PUBLISHABLE_KEY`: Clerk publishable key; safe for the browser.
+- `CLERK_SECRET_KEY`: Clerk server secret used by TanStack Start; never expose it
+  through a `VITE_` variable.
 
 The API and worker variables are documented in [backend/README.md](backend/README.md). The Prava secret key is server-only. OpenAI, R2, Redis, database, authentication, and checkout-executor credentials are also server-only.
 

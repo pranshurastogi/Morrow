@@ -1,4 +1,5 @@
 import { hasApiConfiguration, publicEnvironment } from "@/config/public-env";
+import { getAccessToken } from "@/features/auth/access-token";
 import type {
   Candidate,
   EmbeddedPaymentSession,
@@ -19,13 +20,8 @@ export class ApiError extends Error {
   }
 }
 
-function accessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.sessionStorage.getItem("morrow_access_token");
-}
-
-function authHeaders(): HeadersInit {
-  const token = accessToken();
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getAccessToken();
   if (token) return { Authorization: `Bearer ${token}` };
   if (import.meta.env.DEV && publicEnvironment.developmentUserId) {
     return {
@@ -47,7 +43,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${publicEnvironment.apiBaseUrl}/v1${path}`, {
     ...init,
     headers: {
-      ...authHeaders(),
+      ...(await authHeaders()),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...init.headers,
     },
@@ -166,7 +162,7 @@ export async function watchScan(
   const response = await fetch(
     `${publicEnvironment.apiBaseUrl}/v1/scans/${scanId}/events`,
     {
-      headers: { ...authHeaders(), Accept: "text/event-stream" },
+      headers: { ...(await authHeaders()), Accept: "text/event-stream" },
       signal,
     },
   );
