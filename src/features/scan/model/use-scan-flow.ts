@@ -14,6 +14,7 @@ import {
 } from "../api/client";
 import type {
   Candidate,
+  CheckoutCapability,
   EmbeddedPaymentSession,
   Offer,
   PublicPaymentResult,
@@ -39,6 +40,7 @@ interface State {
   candidate: Candidate | null;
   candidates: Candidate[];
   offers: Offer[];
+  checkoutCapability: CheckoutCapability | null;
   selectedOffer: Offer | null;
   purchaseIntentId: string | null;
   paymentSession: EmbeddedPaymentSession | null;
@@ -55,6 +57,7 @@ type Action =
       candidate: Candidate;
       offers: Offer[];
       selectedOffer: Offer | null;
+      checkoutCapability: CheckoutCapability;
     }
   | { type: "review"; scan: ScanRecord; candidates: Candidate[] }
   | { type: "intent"; purchaseIntentId: string }
@@ -70,6 +73,7 @@ const initialState: State = {
   candidate: null,
   candidates: [],
   offers: [],
+  checkoutCapability: null,
   selectedOffer: null,
   purchaseIntentId: null,
   paymentSession: null,
@@ -118,6 +122,7 @@ function reducer(state: State, action: Action): State {
         candidates: [action.candidate],
         offers: action.offers,
         selectedOffer: action.selectedOffer,
+        checkoutCapability: action.checkoutCapability,
         error: null,
       };
     case "review":
@@ -193,6 +198,7 @@ export function useScanFlow() {
       candidate,
       offers: offerResponse.offers,
       selectedOffer,
+      checkoutCapability: offerResponse.checkout,
     });
   }, []);
 

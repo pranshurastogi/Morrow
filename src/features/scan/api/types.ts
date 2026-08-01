@@ -135,6 +135,11 @@ export interface Offer {
   expiresAt: string;
 }
 
+export interface CheckoutCapability {
+  available: boolean;
+  message: string | null;
+}
+
 export interface EmbeddedPaymentSession {
   paymentSessionId: string;
   providerSessionId: string;

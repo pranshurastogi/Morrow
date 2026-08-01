@@ -79,6 +79,7 @@ function AuthenticatedScanDesk() {
     selectedOffer,
     paymentSession,
     paymentResult,
+    checkoutCapability,
     error,
   } = state;
 
@@ -111,6 +112,7 @@ function AuthenticatedScanDesk() {
             scan={scan}
             candidate={candidate}
             offers={offers}
+            checkoutCapability={checkoutCapability}
             offer={selectedOffer}
             onGet={() => void actions.requestAuthority()}
             onSelectOffer={actions.selectOffer}

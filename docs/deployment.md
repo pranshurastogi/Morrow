@@ -43,6 +43,12 @@ UCP_MAX_PRODUCTS=8
 
 The API profile URL must be publicly reachable over HTTPS before replacing Shopify's development fixture. No Shopify secret is required for public catalogue search or anonymous Cart MCP estimates. Authenticated checkout completion is a separate credentialed integration.
 
+The worker publishes a short-lived checkout-capability heartbeat in Redis. Until
+both `MERCHANT_CHECKOUT_EXECUTOR_URL` and `MERCHANT_CHECKOUT_EXECUTOR_SECRET`
+are configured on the worker, the frontend keeps **Get this** disabled and the
+API refuses Prava approval. This prevents issuing a payment credential when no
+restricted process can turn it into a verified merchant order.
+
 The repository-root `railway.toml` is the API default for an existing Railway
 service connected at the repository root. A separately created worker must use
 `backend/railway/worker.toml` as its Railway config path.

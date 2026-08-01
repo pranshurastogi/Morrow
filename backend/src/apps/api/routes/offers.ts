@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { MorrowError } from "../../../common/errors";
 import { getScanForUser } from "../../../infrastructure/database/scan-repository";
+import { getCheckoutCapability } from "../../../infrastructure/runtime/checkout-capability";
 import {
   listOffersForUser,
   searchVerifiedListings,
@@ -46,18 +47,20 @@ export const offerRoutes: FastifyPluginAsync = async (app) => {
           : { deliveryBefore: body.requirements.deliveryBefore }),
       },
     });
-    return { offers };
+    return { offers, checkout: await getCheckoutCapability() };
   });
 
   app.get("/products/:productId/offers", async (request) => {
     const params = productParamsSchema.parse(request.params);
     const query = listQuerySchema.parse(request.query);
-    return {
-      offers: await listOffersForUser(
+    const [offers, checkout] = await Promise.all([
+      listOffersForUser(
         query.scanId,
         params.productId,
         request.principal.userId,
       ),
-    };
+      getCheckoutCapability(),
+    ]);
+    return { offers, checkout };
   });
 };

@@ -8,6 +8,7 @@ import { minorUnitsToDecimal } from "../../common/money";
 import { getEnvironment } from "../../config/env";
 import { writeAuditEvent } from "../../infrastructure/database/audit-repository";
 import { enqueueCheckout } from "../../infrastructure/queue/queues";
+import { assertCheckoutExecutionAvailable } from "../../infrastructure/runtime/checkout-capability";
 import {
   createPravaSession,
   getPravaPaymentResult,
@@ -57,6 +58,7 @@ export async function startPaymentSession(input: {
   userEmail: string;
 }) {
   const intent = await getPurchaseIntent(input.intentId, input.userId);
+  await assertCheckoutExecutionAvailable();
   if (intent.status !== "APPROVED") {
     const existing = await getPaymentSessionByIntent(
       input.intentId,

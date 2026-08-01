@@ -6,6 +6,7 @@ import {
 } from "@/lib/morrow-api";
 import type {
   Candidate,
+  CheckoutCapability,
   EmbeddedPaymentSession,
   Offer,
   PublicPaymentResult,
@@ -106,7 +107,7 @@ export function confirmProduct(scanId: string, productId: string) {
 export function getOffers(
   scanId: string,
   productId: string,
-): Promise<{ offers: Offer[] }> {
+): Promise<{ offers: Offer[]; checkout: CheckoutCapability }> {
   return apiRequest(
     `/products/${productId}/offers?${new URLSearchParams({ scanId })}`,
   );

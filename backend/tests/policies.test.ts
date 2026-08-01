@@ -17,6 +17,7 @@ import {
   sizesEquivalent,
 } from "../src/modules/recognition/normalization";
 import { assertCandidateMayBeConfirmed } from "../src/modules/matching/confirmation-policy";
+import { isCheckoutExecutorConfigured } from "../src/infrastructure/runtime/checkout-capability";
 
 describe("deterministic policies", () => {
   test("normalizes identifiers without inventing barcode digits", () => {
@@ -92,5 +93,20 @@ describe("deterministic policies", () => {
     expect(reconcilePublicPaymentState("completed", "COMPLETED")).toBe(
       "completed",
     );
+  });
+
+  test("requires both halves of the restricted checkout executor", () => {
+    expect(
+      isCheckoutExecutorConfigured({
+        MERCHANT_CHECKOUT_EXECUTOR_URL: "https://executor.example.com",
+        MERCHANT_CHECKOUT_EXECUTOR_SECRET: "secret",
+      }),
+    ).toBeTrue();
+    expect(
+      isCheckoutExecutorConfigured({
+        MERCHANT_CHECKOUT_EXECUTOR_URL: "https://executor.example.com",
+        MERCHANT_CHECKOUT_EXECUTOR_SECRET: undefined,
+      }),
+    ).toBeFalse();
   });
 });

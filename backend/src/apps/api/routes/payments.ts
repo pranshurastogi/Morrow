@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { MorrowError } from "../../../common/errors";
 import { writeAuditEvent } from "../../../infrastructure/database/audit-repository";
+import { assertCheckoutExecutionAvailable } from "../../../infrastructure/runtime/checkout-capability";
 import {
   approvePurchaseIntent,
   createPurchaseIntent,
@@ -54,6 +55,7 @@ export const paymentRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/purchase-intents/:id/approve", async (request) => {
     const params = intentParamsSchema.parse(request.params);
+    await assertCheckoutExecutionAvailable();
     const intent = await approvePurchaseIntent(
       params.id,
       request.principal.userId,

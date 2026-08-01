@@ -7,7 +7,12 @@ import {
   VintageLabel,
 } from "@/components/morrow/bits";
 import { Button } from "@/components/ui/button";
-import type { Candidate, Offer, ScanRecord } from "../api/types";
+import type {
+  Candidate,
+  CheckoutCapability,
+  Offer,
+  ScanRecord,
+} from "../api/types";
 
 function formatMoney(amountMinor: number, currency: string): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(
@@ -20,6 +25,7 @@ export function ResultPanel({
   candidate,
   offer,
   offers,
+  checkoutCapability,
   onGet,
   onSelectOffer,
   onReject,
@@ -28,6 +34,7 @@ export function ResultPanel({
   candidate: Candidate;
   offer: Offer | null;
   offers: Offer[];
+  checkoutCapability: CheckoutCapability | null;
   onGet: () => void;
   onSelectOffer: (offer: Offer) => void;
   onReject: () => void;
@@ -36,7 +43,7 @@ export function ResultPanel({
     label: `${item.field.replaceAll("_", " ")} matched`,
     status: "confirmed" as const,
   }));
-  const unavailable = !offer;
+  const unavailable = !offer || checkoutCapability?.available !== true;
   const eligibleOffers = offers.filter(
     (item) =>
       !item.illustrative &&
@@ -217,6 +224,23 @@ export function ResultPanel({
                   ? "Listings were found, but none passed exact-variant and policy checks."
                   : (scan.errorMessage ??
                     "No current merchant listing is available.")}
+              </p>
+            </div>
+          </div>
+        </Plate>
+      )}
+
+      {offer && checkoutCapability?.available === false && (
+        <Plate className="mt-3 p-4">
+          <div className="flex gap-3">
+            <CircleAlert
+              className="mt-0.5 h-5 w-5 shrink-0 text-postal"
+              aria-hidden
+            />
+            <div>
+              <p className="font-medium">Purchase connection pending</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {checkoutCapability.message}
               </p>
             </div>
           </div>

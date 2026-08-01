@@ -17,10 +17,13 @@ import {
   startObservability,
   stopObservability,
 } from "../../infrastructure/observability";
+import { startCheckoutCapabilityHeartbeat } from "../../infrastructure/runtime/checkout-capability";
 
 const env = getEnvironment();
 assertRuntimeConfiguration("worker", env);
 await startObservability("worker");
+const stopCheckoutCapabilityHeartbeat =
+  await startCheckoutCapabilityHeartbeat();
 
 const workers = [
   new Worker(
@@ -70,6 +73,7 @@ for (const worker of workers) {
 async function shutdown(signal: string) {
   console.info({ signal }, "worker shutting down");
   await Promise.all(workers.map((worker) => worker.close()));
+  await stopCheckoutCapabilityHeartbeat();
   await closeDatabase();
   await closeRedis();
   await stopObservability();
