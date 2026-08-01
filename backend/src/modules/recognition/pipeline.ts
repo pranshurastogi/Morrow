@@ -12,6 +12,7 @@ import {
 } from "../../infrastructure/database/scan-repository";
 import { readObject, writeObject } from "../../infrastructure/storage/r2";
 import {
+  getSavedCandidates,
   retrieveCandidates,
   saveCandidateVerifications,
 } from "../catalog/catalog-repository";
@@ -27,6 +28,9 @@ import { observeProduct, shouldEscalateObservation } from "./openai-observer";
 import { extractText } from "./ocr";
 import { getEnvironment } from "../../config/env";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
+import { discoverUcpCatalog } from "../../integrations/shopify-ucp/discovery";
+import { ingestUcpCatalog } from "../../integrations/shopify-ucp/catalog-ingestion";
+import { compareCandidatesVisually } from "../matching/openai-candidate-verifier";
 
 function mergeDeterministicBarcodes(
   observation: ProductObservation,
@@ -196,16 +200,53 @@ export async function processScan(scanId: string): Promise<void> {
       if (scan.status === "EVIDENCE_EXTRACTED") {
         if (!scan.observation) throw new Error("Scan observation is missing");
         const capture = determineNextCapture(scan.observation);
-        if (capture && scan.mode === "exact") {
-          await transitionScan(scanId, "REQUIRES_MORE_EVIDENCE", {
-            nextCapture: capture,
-          });
-          return;
-        }
-        const candidates = await retrieveCandidates({
+        let candidates = await retrieveCandidates({
           observation: scan.observation,
           userId: scan.userId,
         });
+        let discoveredProductIds: string[] = [];
+        try {
+          const discovery = await discoverUcpCatalog({
+            observation: scan.observation,
+            countryCode: scan.countryCode ?? "IN",
+            currency: scan.currency ?? "INR",
+          });
+          discoveredProductIds = await ingestUcpCatalog({
+            results: discovery,
+            observation: scan.observation,
+          });
+          if (discoveredProductIds.length > 0) {
+            candidates = await retrieveCandidates({
+              observation: scan.observation,
+              userId: scan.userId,
+              preferredProductIds: discoveredProductIds,
+            });
+          }
+          await writeAuditEvent({
+            userId: scan.userId,
+            entityType: "scan",
+            entityId: scan.id,
+            eventType: "LIVE_CATALOG_SEARCHED",
+            actorType: "provider",
+            payload: {
+              provider: "shopify_ucp",
+              candidateCount: discoveredProductIds.length,
+            },
+          });
+        } catch (error) {
+          if (candidates.length === 0) throw error;
+          await writeAuditEvent({
+            userId: scan.userId,
+            entityType: "scan",
+            entityId: scan.id,
+            eventType: "LIVE_CATALOG_UNAVAILABLE",
+            actorType: "provider",
+            payload: {
+              provider: "shopify_ucp",
+              fallbackCandidateCount: candidates.length,
+            },
+          });
+        }
         const verifications = candidates.map((candidate) =>
           verifyCandidate(scan.observation!, candidate),
         );
@@ -230,10 +271,40 @@ export async function processScan(scanId: string): Promise<void> {
       }
       if (scan.status === "VERIFYING") {
         if (!scan.observation) throw new Error("Scan observation is missing");
-        const candidates = await retrieveCandidates({
-          observation: scan.observation,
-          userId: scan.userId,
-        });
+        let candidates = await getSavedCandidates(scanId);
+        if (candidates.length === 0) {
+          candidates = await retrieveCandidates({
+            observation: scan.observation,
+            userId: scan.userId,
+          });
+        }
+        const preparedImages = (await getScanImages(scanId))
+          .filter((image) => Boolean(image.processedObjectKey && image.sha256))
+          .slice(-4);
+        if (preparedImages.length > 0) {
+          try {
+            const scanImages = await Promise.all(
+              preparedImages.map(async (image) => ({
+                image: await readObject(image.processedObjectKey!),
+                role: image.role,
+                sha256: image.sha256!,
+              })),
+            );
+            candidates = await compareCandidatesVisually({
+              scanImages,
+              candidates,
+            });
+          } catch {
+            await writeAuditEvent({
+              userId: scan.userId,
+              entityType: "scan",
+              entityId: scan.id,
+              eventType: "VISUAL_COMPARISON_UNAVAILABLE",
+              actorType: "worker",
+              payload: { fallback: "deterministic_text_and_identifier_policy" },
+            });
+          }
+        }
         const verifications = candidates.map((candidate) =>
           verifyCandidate(scan.observation!, candidate),
         );

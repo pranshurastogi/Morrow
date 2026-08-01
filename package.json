@@ -23,6 +23,7 @@
     "typecheck:backend": "bun run --cwd backend typecheck",
     "check": "bash scripts/quality/check.sh",
     "db:migrate": "bun scripts/database/migrate.ts",
+    "ucp:probe": "bun scripts/commerce/probe-ucp.ts",
     "r2:cors:apply": "wrangler r2 bucket cors set morrow --file scripts/cloudflare/r2-cors.wrangler.json --force",
     "r2:cors:check": "wrangler r2 bucket cors list morrow",
     "format": "prettier --write ."

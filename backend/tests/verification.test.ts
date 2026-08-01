@@ -91,4 +91,13 @@ describe("candidate verification", () => {
     };
     expect(classifyCandidateSet([first, second]).status).toBe("AMBIGUOUS");
   });
+
+  test("does not arbitrarily select between duplicate exact records", () => {
+    const first = verifyCandidate(observation, candidate({ id: "first" }));
+    const second = {
+      ...verifyCandidate(observation, candidate({ id: "second" })),
+      identityScore: first.identityScore - 0.01,
+    };
+    expect(classifyCandidateSet([first, second]).status).toBe("AMBIGUOUS");
+  });
 });

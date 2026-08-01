@@ -9,6 +9,7 @@ import {
   type OfferRequirements,
   verifyMerchantVariant,
 } from "./offer-policy";
+import { createUcpCartQuote } from "../../integrations/shopify-ucp/cart";
 
 function stableOfferId(scanId: string, listingId: string): string {
   const bytes = Buffer.from(
@@ -45,6 +46,22 @@ function mapProduct(row: Record<string, unknown>): CanonicalProductCandidate {
     retrievalScore: 1,
     imageSimilarity: 0,
     historyMatch: false,
+    sourceProvider:
+      row.source_provider === null
+        ? null
+        : String(row.source_provider ?? "") || null,
+    sourceProductId:
+      row.source_product_id === null
+        ? null
+        : String(row.source_product_id ?? "") || null,
+    sourceVariantId:
+      row.source_variant_id === null
+        ? null
+        : String(row.source_variant_id ?? "") || null,
+    sourceMerchantDomain:
+      row.source_merchant_domain === null
+        ? null
+        : String(row.source_merchant_domain ?? "") || null,
   };
 }
 
@@ -61,65 +78,113 @@ export async function searchVerifiedListings(
       m.country_code, m.provider, m.trust_score, m.authorized_seller
     from merchant_listings ml join merchants m on m.id = ml.merchant_id
     where ml.canonical_product_id = ${input.productId} and m.active = true
+      and m.country_code is not null
       and ml.price_minor is not null and ml.currency is not null
       and ml.product_url is not null and ml.last_seen_at > now() - interval '1 day'
   `;
-  const offers: NormalizedOffer[] = rows.map((row) => {
-    const offer: NormalizedOffer = {
-      id: stableOfferId(input.scanId, String(row.id)),
-      provider:
-        row.provider === "prava_ucp"
-          ? "prava_ucp"
-          : row.provider === "shopify_ucp"
-            ? "shopify_ucp"
-            : "manual",
-      merchant: {
-        id: String(row.merchant_id),
-        name: String(row.merchant_name),
-        url: `https://${String(row.domain)}`,
-        countryCode: String(row.country_code ?? "IN").trim(),
-        trustScore: row.trust_score === null ? null : Number(row.trust_score),
-        authorizedSeller:
-          row.authorized_seller === null
-            ? null
-            : Boolean(row.authorized_seller),
-      },
-      product: {
-        externalProductId: String(row.external_product_id),
-        externalVariantId: String(row.external_variant_id),
-        title: String(row.title),
-        imageUrl: row.image_url === null ? null : String(row.image_url),
-        attributes: Object.fromEntries(
-          Object.entries((row.attributes as Record<string, unknown>) ?? {}).map(
-            ([key, value]) => [key, String(value)],
+  const offers: NormalizedOffer[] = await Promise.all(
+    rows.map(async (row) => {
+      let offer: NormalizedOffer = {
+        id: stableOfferId(input.scanId, String(row.id)),
+        provider:
+          row.provider === "prava_ucp"
+            ? "prava_ucp"
+            : row.provider === "shopify_ucp"
+              ? "shopify_ucp"
+              : "manual",
+        merchant: {
+          id: String(row.merchant_id),
+          name: String(row.merchant_name),
+          url: `https://${String(row.domain)}`,
+          countryCode: String(row.country_code ?? "IN").trim(),
+          trustScore: row.trust_score === null ? null : Number(row.trust_score),
+          authorizedSeller:
+            row.authorized_seller === null
+              ? null
+              : Boolean(row.authorized_seller),
+        },
+        product: {
+          externalProductId: String(row.external_product_id),
+          externalVariantId: String(row.external_variant_id),
+          title: String(row.title),
+          imageUrl: row.image_url === null ? null : String(row.image_url),
+          attributes: Object.fromEntries(
+            Object.entries(
+              (row.attributes as Record<string, unknown>) ?? {},
+            ).map(([key, value]) => [key, String(value)]),
           ),
-        ),
-      },
-      price: {
-        subtotalMinor: Number(row.price_minor),
-        shippingMinor: null,
-        taxMinor: null,
-        estimatedTotalMinor: Number(row.price_minor),
-        currency: String(row.currency).trim(),
-        isBinding: false,
-      },
-      inventory: {
-        status: ["in_stock", "limited", "out_of_stock"].includes(
-          String(row.availability),
-        )
-          ? (row.availability as "in_stock" | "limited" | "out_of_stock")
-          : "unknown",
-      },
-      delivery: null,
-      returns: null,
-      identityVerification: { status: "likely", score: 0, contradictions: [] },
-      illustrative: false,
-    };
-    return {
-      ...offer,
-      identityVerification: verifyMerchantVariant(product, offer),
-    };
-  });
+        },
+        price: {
+          subtotalMinor: Number(row.price_minor),
+          shippingMinor: null,
+          taxMinor: null,
+          estimatedTotalMinor: Number(row.price_minor),
+          currency: String(row.currency).trim(),
+          isBinding: false,
+        },
+        inventory: {
+          status: ["in_stock", "limited", "out_of_stock"].includes(
+            String(row.availability),
+          )
+            ? (row.availability as "in_stock" | "limited" | "out_of_stock")
+            : "unknown",
+        },
+        delivery: null,
+        returns: null,
+        identityVerification: {
+          status: "likely",
+          score: 0,
+          contradictions: [],
+        },
+        illustrative: false,
+      };
+      const listingAttributes = offer.product.attributes;
+      if (
+        offer.provider === "shopify_ucp" &&
+        listingAttributes.ucp_endpoint &&
+        offer.product.externalVariantId
+      ) {
+        try {
+          const quote = await createUcpCartQuote({
+            endpoint: listingAttributes.ucp_endpoint,
+            variantId: offer.product.externalVariantId,
+            quantity: 1,
+            countryCode: offer.merchant.countryCode,
+          });
+          offer = {
+            ...offer,
+            product: {
+              ...offer.product,
+              attributes: {
+                ...offer.product.attributes,
+                ucp_cart_id: quote.cartId,
+                ...(quote.continueUrl
+                  ? { ucp_continue_url: quote.continueUrl }
+                  : {}),
+                ...(quote.expiresAt
+                  ? { ucp_cart_expires_at: quote.expiresAt }
+                  : {}),
+              },
+            },
+            price: {
+              subtotalMinor: quote.subtotalMinor,
+              shippingMinor: quote.shippingMinor,
+              taxMinor: quote.taxMinor,
+              estimatedTotalMinor: quote.estimatedTotalMinor,
+              currency: quote.currency,
+              isBinding: false,
+            },
+          };
+        } catch {
+          // Catalogue price remains a clearly labelled estimate when Cart MCP is unavailable.
+        }
+      }
+      return {
+        ...offer,
+        identityVerification: verifyMerchantVariant(product, offer),
+      };
+    }),
+  );
   const ranked = rankOffers(offers, input.requirements);
 
   await sql.begin(async (transaction) => {

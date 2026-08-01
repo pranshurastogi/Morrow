@@ -4,11 +4,12 @@
 
 Each scan is a versioned database state machine. HTTP only creates work and reads state; AI, OCR, retrieval, and merchant discovery run in BullMQ. The frontend consumes state changes over an authenticated fetch-based SSE stream, which allows bearer headers unlike the browser's native `EventSource` API.
 
-The workflow stops at three deliberate trust gates:
+The workflow stops at four deliberate trust gates:
 
-1. **Identity gate:** exact identifier plus zero fatal contradictions.
-2. **Offer gate:** the sellable merchant variant independently matches the canonical product.
-3. **Authority gate:** the frozen purchase intent is owned, current, explicitly approved, and within the amount cap.
+1. **Retrieval gate:** Shopify UCP proposes live catalogue records; it never establishes identity by itself.
+2. **Identity gate:** an exact identifier may auto-advance; a visual/label match remains likely or alternative until the user chooses it.
+3. **Offer gate:** the sellable merchant source variant independently matches the canonical product.
+4. **Authority gate:** the frozen purchase intent is owned, current, explicitly approved, and within the amount cap.
 
 ## Data model
 
@@ -16,9 +17,13 @@ Canonical products represent real-world identity. Merchant listings represent of
 
 ## Retrieval and verification
 
-Identifier, PostgreSQL full-text, pgvector, and user-confirmation retrieval run independently and merge into a bounded candidate set. Retrieval only proposes candidates. Verification applies normalized field comparisons and fatal contradiction rules for barcode, model, part number, size, brand, voltage, region, connector, and compatibility where available.
+Identifier, PostgreSQL full-text, pgvector, prior confirmations, and live Shopify Global Catalog retrieval merge into a bounded candidate set. Relevant supplied Indian storefronts are queried as targeted fallbacks. Results are normalized into canonical variants and merchant listings with source provenance.
+
+The vision model compares at most five catalogue images with the buyer's prepared images and returns only structured observations. Deterministic code computes the visual score and applies identifier, size, brand, model, and part-number contradictions. A visual comparison can support a likely match but can never create exact status by itself.
 
 Model confidence is never used as final confidence. The score is computed by policy code and exact status still requires the categorical identifier rule.
+
+After identity approval, Cart MCP refreshes each eligible source variant and stores its anonymous cart ID, current totals, expiry, and continue URL in the offer snapshot. Shipping and tax remain estimates until a destination-aware checkout or Browser Harness reconciliation.
 
 ## Security boundary
 

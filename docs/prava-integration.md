@@ -20,6 +20,12 @@ If Morrow later needs recurring authority, implement Prava mandates as a separat
 
 Public Prava documentation describes Browser Harness behavior but does not publish a callable API contract. Morrow therefore exposes a private `MERCHANT_CHECKOUT_EXECUTOR_URL` adapter with strict request/response validation. Connect this only to a Prava-approved Browser Harness wrapper or a reviewed merchant adapter. Until it is configured, Morrow can demonstrate real sandbox card approval but must not claim that a merchant order was placed.
 
+The executor receives the frozen UCP cart ID and continue URL inside the offer snapshot. It is the only process that receives Prava's one-time network credential. It must return a definitive merchant order ID and final total before Morrow reports `APPROVED` to Prava.
+
+## UCP is not wallet access
+
+Morrow calls Shopify UCP catalogue and cart tools directly over their documented JSON-RPC transport. This does not use Prava Pay MCP, does not link this coding agent to a wallet, and does not bypass the embedded Prava approval surface.
+
 ## Secret rotation
 
 The sandbox secret shared in conversation should be considered disclosed. Rotate it before deployment, store the replacement only in Railway, and store the publishable replacement only in Vercel. Never commit either value.

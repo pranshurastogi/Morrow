@@ -16,10 +16,12 @@ R2 image
   → orientation/resize/metadata removal
   → barcode + optional OCR (cached by image hash)
   → schema-bound multimodal observation
-  → identifier/text/vector/history retrieval
+  → identifier/text/vector/history + live Shopify UCP retrieval
+  → multimodal image-to-catalogue comparison
   → deterministic contradiction matrix
   → exact, similar, ambiguous, or more evidence
-  → merchant-variant verification
+  → explicit user choice for likely/alternative matches
+  → merchant source-variant verification + Cart MCP estimate
   → ranked offers
 ```
 

@@ -79,6 +79,31 @@ describe("merchant offer policy", () => {
     expect(verifyMerchantVariant(product, wrong).status).toBe("rejected");
   });
 
+  test("verifies the exact UCP source variant without inventing a barcode", () => {
+    const ucpProduct = {
+      ...product,
+      gtin: null,
+      sourceProvider: "shopify_ucp",
+      sourceVariantId: "gid://shopify/ProductVariant/30ml",
+      sourceMerchantDomain: "minimalistinc.myshopify.com",
+    };
+    const sourceOffer = offer({
+      provider: "shopify_ucp",
+      product: {
+        ...offer().product,
+        attributes: {
+          source_variant_id: "gid://shopify/ProductVariant/30ml",
+          source_merchant_domain: "minimalistinc.myshopify.com",
+          size_value: "473",
+          size_unit: "ml",
+        },
+      },
+    });
+    expect(verifyMerchantVariant(ucpProduct, sourceOffer).status).toBe(
+      "verified",
+    );
+  });
+
   test("hard-filters budget violations", () => {
     const verified = offer({
       identityVerification: {

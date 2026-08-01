@@ -31,6 +31,18 @@ Create PostgreSQL and Redis services, then create two services from this reposit
 
 The API service runs migrations before deployment. Both services build from the root Bun lockfile. Give the worker OpenAI, R2, database, and Redis variables. Give the API R2, database, Redis, Prava, auth, and session-encryption variables. Only the worker should receive the restricted merchant checkout executor secret.
 
+Set these on the worker for live catalogue discovery:
+
+```text
+UCP_ENABLED=true
+UCP_GLOBAL_CATALOG_URL=https://catalog.shopify.com/api/ucp/mcp
+UCP_AGENT_PROFILE_URL=https://<api-domain>/.well-known/ucp
+UCP_REQUEST_TIMEOUT_MS=12000
+UCP_MAX_PRODUCTS=8
+```
+
+The API profile URL must be publicly reachable over HTTPS before replacing Shopify's development fixture. No Shopify secret is required for public catalogue search or anonymous Cart MCP estimates. Authenticated checkout completion is a separate credentialed integration.
+
 The repository-root `railway.toml` is the API default for an existing Railway
 service connected at the repository root. A separately created worker must use
 `backend/railway/worker.toml` as its Railway config path.

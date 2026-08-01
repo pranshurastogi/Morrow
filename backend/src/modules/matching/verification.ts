@@ -26,6 +26,13 @@ export interface CanonicalProductCandidate {
   retrievalScore: number;
   imageSimilarity: number;
   historyMatch: boolean;
+  imageUrl?: string | null;
+  sourceProvider?: string | null;
+  sourceProductId?: string | null;
+  sourceVariantId?: string | null;
+  sourceMerchantDomain?: string | null;
+  visualMismatch?: boolean;
+  visualContradictions?: string[];
 }
 
 export type CandidateClassification =
@@ -79,6 +86,16 @@ export function verifyCandidate(
 ): CandidateVerification {
   const matchedEvidence: CandidateVerification["matchedEvidence"] = [];
   const contradictions: CandidateVerification["contradictions"] = [];
+  if (candidate.visualMismatch) {
+    contradictions.push({
+      field: "visual_identity",
+      observed: "The photographed object",
+      candidate:
+        candidate.visualContradictions?.join("; ") ||
+        "Catalogue image depicts a different product",
+      fatal: true,
+    });
+  }
   const barcode = observationBarcode(observation);
   const barcodes = candidateBarcodes(candidate);
   const barcodeMatch = barcode ? barcodes.includes(barcode) : null;
@@ -266,11 +283,11 @@ export function classifyCandidateSet(verifications: CandidateVerification[]): {
     .sort((a, b) => b.identityScore - a.identityScore);
   const first = ranked[0];
   if (!first) return { status: "REQUIRES_MORE_EVIDENCE", selected: null };
-  if (first.classification === "exact_verified")
-    return { status: "EXACT_VERIFIED", selected: first };
   const second = ranked[1];
   if (second && first.identityScore - second.identityScore < 0.08) {
     return { status: "AMBIGUOUS", selected: null };
   }
+  if (first.classification === "exact_verified")
+    return { status: "EXACT_VERIFIED", selected: first };
   return { status: "SIMILAR_FOUND", selected: first };
 }

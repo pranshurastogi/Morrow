@@ -5,6 +5,11 @@ const booleanFromEnvironment = z
   .default("false")
   .transform((value) => value === "true");
 
+const enabledBooleanFromEnvironment = z
+  .enum(["true", "false"])
+  .default("true")
+  .transform((value) => value === "true");
+
 const environmentSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -38,6 +43,23 @@ const environmentSchema = z.object({
     .enum(["none", "low", "medium", "high"])
     .default("low"),
   OCR_ENABLED: booleanFromEnvironment,
+
+  UCP_ENABLED: enabledBooleanFromEnvironment,
+  UCP_GLOBAL_CATALOG_URL: z
+    .url()
+    .default("https://catalog.shopify.com/api/ucp/mcp"),
+  UCP_AGENT_PROFILE_URL: z
+    .url()
+    .default(
+      "https://shopify.dev/ucp/agent-profiles/2026-04-08/valid-with-capabilities.json",
+    ),
+  UCP_REQUEST_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(60_000)
+    .default(12_000),
+  UCP_MAX_PRODUCTS: z.coerce.number().int().min(1).max(20).default(8),
 
   PRAVA_API_URL: z.url().default("https://sandbox.api.prava.space"),
   PRAVA_SECRET_KEY: z.string().min(1).optional(),

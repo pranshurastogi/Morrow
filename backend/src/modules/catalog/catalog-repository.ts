@@ -87,6 +87,24 @@ function mapCandidate(
     imageSimilarity:
       overrides.imageSimilarity ?? Number(row.image_similarity ?? 0),
     historyMatch: overrides.historyMatch ?? Boolean(row.history_match),
+    imageUrl:
+      row.image_url === null ? null : String(row.image_url ?? "") || null,
+    sourceProvider:
+      row.source_provider === null
+        ? null
+        : String(row.source_provider ?? "") || null,
+    sourceProductId:
+      row.source_product_id === null
+        ? null
+        : String(row.source_product_id ?? "") || null,
+    sourceVariantId:
+      row.source_variant_id === null
+        ? null
+        : String(row.source_variant_id ?? "") || null,
+    sourceMerchantDomain:
+      row.source_merchant_domain === null
+        ? null
+        : String(row.source_merchant_domain ?? "") || null,
   };
 }
 
@@ -111,7 +129,11 @@ async function createEmbedding(text: string): Promise<number[] | null> {
 }
 
 export async function retrieveCandidates(
-  input: { observation: ProductObservation; userId: string },
+  input: {
+    observation: ProductObservation;
+    userId: string;
+    preferredProductIds?: string[];
+  },
   sql: Sql = getDatabase(),
 ): Promise<CanonicalProductCandidate[]> {
   const identifiers = identifierValues(input.observation);
@@ -142,13 +164,22 @@ export async function retrieveCandidates(
     where upc.user_id = ${input.userId}
     order by upc.created_at desc limit 20
   `;
+  const preferredIds = [...new Set(input.preferredProductIds ?? [])];
+  const preferredPromise = preferredIds.length
+    ? sql`
+        select *, 1::float as retrieval_score
+        from canonical_products where id in ${sql(preferredIds)}
+      `
+    : Promise.resolve([]);
 
-  const [identifierRows, textRows, historyRows, embedding] = await Promise.all([
-    identifierPromise,
-    textPromise,
-    historyPromise,
-    embeddingPromise,
-  ]);
+  const [identifierRows, textRows, historyRows, preferredRows, embedding] =
+    await Promise.all([
+      identifierPromise,
+      textPromise,
+      historyPromise,
+      preferredPromise,
+      embeddingPromise,
+    ]);
   const vectorRows = embedding
     ? await sql`
         select *, (1 - (text_embedding <=> ${`[${embedding.join(",")}]`}::vector))::float as retrieval_score
@@ -185,13 +216,28 @@ export async function retrieveCandidates(
     }
   };
   ingest(identifierRows, 1);
+  ingest(preferredRows, 0.92);
   ingest(textRows, 0.72);
   ingest(vectorRows, 0.62);
   ingest(historyRows, 0.8, true);
 
-  return [...candidates.values()]
+  const ranked = [...candidates.values()]
     .sort((a, b) => b.retrievalScore - a.retrievalScore)
     .slice(0, 10);
+  if (ranked.length === 0) return [];
+  const imageRows = await sql`
+    select distinct on (product_id) product_id, image_url
+    from product_images
+    where product_id in ${sql(ranked.map((candidate) => candidate.id))}
+    order by product_id, case when image_type = 'primary' then 0 else 1 end, created_at desc
+  `;
+  const images = new Map(
+    imageRows.map((row) => [String(row.product_id), String(row.image_url)]),
+  );
+  return ranked.map((candidate) => ({
+    ...candidate,
+    imageUrl: images.get(candidate.id) ?? candidate.imageUrl ?? null,
+  }));
 }
 
 export async function saveCandidateVerifications(
@@ -227,6 +273,25 @@ export async function saveCandidateVerifications(
   });
 }
 
+export async function getSavedCandidates(
+  scanId: string,
+  sql: Sql = getDatabase(),
+): Promise<CanonicalProductCandidate[]> {
+  const rows = await sql`
+    select cp.*, sc.retrieval_score, sc.image_score as image_similarity,
+      (sc.history_score > 0) as history_match,
+      (select pi.image_url from product_images pi where pi.product_id = cp.id
+        order by case when pi.image_type = 'primary' then 0 else 1 end, pi.created_at desc
+        limit 1) as image_url
+    from scan_candidates sc
+    join canonical_products cp on cp.id = sc.product_id
+    where sc.scan_id = ${scanId}
+    order by sc.rank
+    limit 10
+  `;
+  return rows.map((row) => mapCandidate(row));
+}
+
 export async function listCandidatesForUser(
   scanId: string,
   userId: string,
@@ -235,7 +300,12 @@ export async function listCandidatesForUser(
   return sql`
     select sc.rank, sc.retrieval_score, sc.identity_score, sc.purchase_score, sc.classification,
       sc.matched_evidence, sc.contradictions, cp.id, cp.brand, cp.name, cp.variant,
-      cp.size_value, cp.size_unit, cp.gtin, cp.model_number, cp.mpn
+      cp.size_value, cp.size_unit, cp.gtin, cp.model_number, cp.mpn,
+      cp.source_provider, cp.source_product_id, cp.source_variant_id,
+      cp.source_merchant_domain,
+      (select pi.image_url from product_images pi where pi.product_id = cp.id
+        order by case when pi.image_type = 'primary' then 0 else 1 end, pi.created_at desc
+        limit 1) as image_url
     from scan_candidates sc
     join scans s on s.id = sc.scan_id
     join canonical_products cp on cp.id = sc.product_id

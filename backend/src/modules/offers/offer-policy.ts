@@ -26,6 +26,36 @@ export function verifyMerchantVariant(
   let score = 0;
   let exactIdentifier = false;
 
+  const canonicalIdentityKey = String(
+    product.attributes.catalog_identity_key ?? "",
+  );
+  if (
+    canonicalIdentityKey &&
+    canonicalIdentityKey === listingAttribute(offer, "catalog_identity_key")
+  ) {
+    score += 0.8;
+    exactIdentifier = true;
+  }
+
+  const sourceProvider =
+    product.sourceProvider ?? String(product.attributes.source_provider ?? "");
+  const sourceVariantId =
+    product.sourceVariantId ??
+    String(product.attributes.source_variant_id ?? "");
+  const sourceMerchantDomain =
+    product.sourceMerchantDomain ??
+    String(product.attributes.source_merchant_domain ?? "");
+  if (
+    sourceProvider === "shopify_ucp" &&
+    sourceVariantId &&
+    sourceVariantId === listingAttribute(offer, "source_variant_id") &&
+    sourceMerchantDomain &&
+    sourceMerchantDomain === listingAttribute(offer, "source_merchant_domain")
+  ) {
+    score += 0.8;
+    exactIdentifier = true;
+  }
+
   const candidateBarcode = product.gtin ?? product.ean ?? product.upc;
   const listingBarcode = listingAttribute(
     offer,
