@@ -23,6 +23,8 @@
     "typecheck:backend": "bun run --cwd backend typecheck",
     "check": "bash scripts/quality/check.sh",
     "db:migrate": "bun scripts/database/migrate.ts",
+    "r2:cors:apply": "wrangler r2 bucket cors set morrow --file scripts/cloudflare/r2-cors.wrangler.json --force",
+    "r2:cors:check": "wrangler r2 bucket cors list morrow",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -99,6 +101,7 @@
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "wrangler": "^4.118.0"
   }
 }

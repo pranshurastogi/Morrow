@@ -1,7 +1,11 @@
 import {
+  BarcodeFormat,
   BinaryBitmap,
+  DataMatrixReader,
+  DecodeHintType,
   HybridBinarizer,
-  MultiFormatReader,
+  MultiFormatOneDReader,
+  QRCodeReader,
   RGBLuminanceSource,
 } from "@zxing/library";
 import sharp from "sharp";
@@ -30,21 +34,50 @@ export async function detectBarcode(image: Buffer): Promise<DetectedBarcode[]> {
     info.height,
   );
   const bitmap = new BinaryBitmap(new HybridBinarizer(luminance));
-  const reader = new MultiFormatReader();
-  try {
-    const result = reader.decode(bitmap);
-    const normalized = normalizeBarcode(result.getText());
-    if (!normalized) return [];
-    return [
-      {
-        format: result.getBarcodeFormat().toString(),
-        value: normalized,
-        confidence: 1,
-      },
-    ];
-  } catch {
-    return [];
-  } finally {
-    reader.reset();
+  const hints = new Map<DecodeHintType, unknown>([
+    [DecodeHintType.TRY_HARDER, true],
+    [
+      DecodeHintType.POSSIBLE_FORMATS,
+      [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.ITF,
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.DATA_MATRIX,
+      ],
+    ],
+  ]);
+  const readers = [
+    new MultiFormatOneDReader(hints),
+    new QRCodeReader(),
+    new DataMatrixReader(),
+  ];
+
+  // MultiFormatReader's CommonJS build does not initialise its default reader
+  // collection reliably under Bun. Calling the concrete readers also avoids
+  // its noisy exception logging for ordinary images without a barcode.
+  for (const reader of readers) {
+    try {
+      const result = reader.decode(bitmap, hints);
+      const normalized = normalizeBarcode(result.getText());
+      if (!normalized) continue;
+      return [
+        {
+          format: result.getBarcodeFormat().toString(),
+          value: normalized,
+          confidence: 1,
+        },
+      ];
+    } catch {
+      // A photo without a readable code is a normal extraction result.
+    } finally {
+      reader.reset();
+    }
   }
+
+  return [];
 }

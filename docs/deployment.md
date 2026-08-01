@@ -48,6 +48,13 @@ That second request needs a bucket CORS policy in addition to API CORS.
 3. Paste the contents of `scripts/cloudflare/r2-cors.production.json`.
 4. Save, then retry from `https://morrow-red.vercel.app`.
 
+For an authenticated Wrangler session, the equivalent checked-in command is:
+
+```sh
+bun run r2:cors:apply
+bun run r2:cors:check
+```
+
 Origins must match exactly and must not end in `/`. Add preview origins only
 when they are intentionally allowed; do not use `*` for authenticated uploads.
 The R2 access key used by the API needs object read/write access, but it does
