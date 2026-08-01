@@ -31,8 +31,27 @@ Create PostgreSQL and Redis services, then create two services from this reposit
 
 The API service runs migrations before deployment. Both services build from the root Bun lockfile. Give the worker OpenAI, R2, database, and Redis variables. Give the API R2, database, Redis, Prava, auth, and session-encryption variables. Only the worker should receive the restricted merchant checkout executor secret.
 
+The repository-root `railway.toml` is the API default for an existing Railway
+service connected at the repository root. A separately created worker must use
+`backend/railway/worker.toml` as its Railway config path.
+
 Use a private R2 bucket. Configure lifecycle rules as defense in depth in addition to Morrow's cleanup worker.
 Allow `PUT` from the exact Vercel production and preview origins in the bucket CORS policy, with the supported image content types. Do not make the bucket public.
+
+### R2 browser-upload CORS
+
+The API issues a presigned object URL, then the browser uploads directly to R2.
+That second request needs a bucket CORS policy in addition to API CORS.
+
+1. Open Cloudflare → **R2 object storage** → the Morrow bucket.
+2. Open **Settings** → **CORS Policy** → **Add CORS policy**.
+3. Paste the contents of `scripts/cloudflare/r2-cors.production.json`.
+4. Save, then retry from `https://morrow-red.vercel.app`.
+
+Origins must match exactly and must not end in `/`. Add preview origins only
+when they are intentionally allowed; do not use `*` for authenticated uploads.
+The R2 access key used by the API needs object read/write access, but it does
+not need bucket-administration access.
 
 ## Release order
 
