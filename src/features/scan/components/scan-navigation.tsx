@@ -1,4 +1,4 @@
-import { Archive, Compass, Package, Zap } from "lucide-react";
+import { Archive, Compass, Package, UserRound, Zap } from "lucide-react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +7,7 @@ const sections = [
   { icon: Zap, label: "Requests", to: "/requests" },
   { icon: Package, label: "Dispatches", to: "/dispatches" },
   { icon: Archive, label: "Archive", to: "/archive" },
+  { icon: UserRound, label: "Account", to: "/account" },
 ] as const;
 
 export function ScanNavigation({ onScan }: { onScan?: () => void }) {
@@ -19,7 +20,7 @@ export function ScanNavigation({ onScan }: { onScan?: () => void }) {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-parchment/95 backdrop-blur-sm"
       aria-label="Sections"
     >
-      <ul className="mx-auto grid max-w-[560px] grid-cols-4">
+      <ul className="mx-auto grid max-w-[680px] grid-cols-5">
         {sections.map((item) => (
           <li key={item.label}>
             <Link

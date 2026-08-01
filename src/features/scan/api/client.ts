@@ -10,6 +10,8 @@ import type {
   EmbeddedPaymentSession,
   Offer,
   PublicPaymentResult,
+  SandboxApprovalResult,
+  SandboxApprovalSession,
   ScanRecord,
 } from "./types";
 
@@ -254,6 +256,23 @@ export function getPaymentStatus(
   paymentSessionId: string,
 ): Promise<PublicPaymentResult> {
   return apiRequest(`/payments/${paymentSessionId}/status`);
+}
+
+export function createSandboxApprovalCheck(input: {
+  scanId: string;
+  productId: string;
+  offerId: string;
+}): Promise<SandboxApprovalSession> {
+  return apiRequest("/sandbox-approval-checks", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getSandboxApprovalStatus(
+  sandboxCheckId: string,
+): Promise<SandboxApprovalResult> {
+  return apiRequest(`/sandbox-approval-checks/${sandboxCheckId}`);
 }
 
 export { ApiError };

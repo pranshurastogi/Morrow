@@ -16,6 +16,11 @@ import {
 } from "@/features/scan/components/result-panel";
 import { ScanHeader } from "@/features/scan/components/scan-header";
 import { ScanNavigation } from "@/features/scan/components/scan-navigation";
+import {
+  SandboxCheckoutPanel,
+  SandboxCompletionPanel,
+  SandboxStatusPanel,
+} from "@/features/scan/components/sandbox-checkout-panel";
 import { useScanFlow } from "@/features/scan/model/use-scan-flow";
 
 const title = "Morrow — Object inspection";
@@ -79,6 +84,8 @@ function AuthenticatedScanDesk() {
     selectedOffer,
     paymentSession,
     paymentResult,
+    sandboxSession,
+    sandboxResult,
     checkoutCapability,
     error,
   } = state;
@@ -124,6 +131,7 @@ function AuthenticatedScanDesk() {
             checkoutCapability={checkoutCapability}
             offer={selectedOffer}
             onGet={() => void actions.requestAuthority()}
+            onSandboxTest={() => void actions.startSandboxApproval()}
             onSelectOffer={actions.selectOffer}
             onReject={actions.reset}
           />
@@ -134,11 +142,30 @@ function AuthenticatedScanDesk() {
             onApprove={() => void actions.approveWithPrava()}
           />
         )}
-        {stage === "payment" && paymentSession && (
+        {stage === "payment" && paymentSession && selectedOffer && (
           <PaymentPanel
             session={paymentSession}
+            offer={selectedOffer}
             onSuccess={() => void actions.pollPayment()}
-            onError={(paymentError) => console.error(paymentError)}
+            onError={actions.stopWithError}
+          />
+        )}
+        {stage === "sandbox_payment" && sandboxSession && selectedOffer && (
+          <SandboxCheckoutPanel
+            session={sandboxSession}
+            offer={selectedOffer}
+            onSuccess={() => void actions.pollSandboxApproval()}
+            onError={actions.stopWithError}
+          />
+        )}
+        {stage === "sandbox_closing" && selectedOffer && (
+          <SandboxStatusPanel offer={selectedOffer} result={sandboxResult} />
+        )}
+        {stage === "sandbox_complete" && selectedOffer && sandboxResult && (
+          <SandboxCompletionPanel
+            offer={selectedOffer}
+            result={sandboxResult}
+            onReset={actions.reset}
           />
         )}
         {stage === "complete" && (

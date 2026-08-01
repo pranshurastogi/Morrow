@@ -138,14 +138,38 @@ export interface Offer {
 export interface CheckoutCapability {
   available: boolean;
   message: string | null;
+  sandboxApprovalAvailable: boolean;
 }
 
-export interface EmbeddedPaymentSession {
-  paymentSessionId: string;
-  providerSessionId: string;
+export interface PravaCollectionSession {
   sessionToken: string;
   iframeUrl: string;
   expiresAt: string;
+}
+
+export interface EmbeddedPaymentSession extends PravaCollectionSession {
+  paymentSessionId: string;
+  providerSessionId: string;
+}
+
+export interface SandboxApprovalSession extends PravaCollectionSession {
+  sandboxCheckId: string;
+  providerOrderId: string;
+}
+
+export interface SandboxApprovalResult {
+  status: "pending" | "verified" | "failed" | "expired";
+  providerOrderId: string;
+  orderPlaced: false;
+  providerStatus: "pending" | "awaiting_result" | "completed" | "failed";
+  milestones: {
+    sessionCreated: true;
+    cardAndPasskeyApproved: boolean;
+    credentialIssued: boolean;
+    merchantCheckout: "not_attempted";
+    providerClosed: boolean;
+  };
+  message: string;
 }
 
 export interface PublicPaymentResult {

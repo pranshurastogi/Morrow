@@ -4,11 +4,13 @@ import {
   approvePurchaseIntent,
   createPaymentSession,
   createPurchaseIntent,
+  createSandboxApprovalCheck,
   createScanFromFile,
   confirmProduct,
   getCandidates,
   getOffers,
   getPaymentStatus,
+  getSandboxApprovalStatus,
   getScan,
   retryScan,
   watchScan,
@@ -19,6 +21,8 @@ import type {
   EmbeddedPaymentSession,
   Offer,
   PublicPaymentResult,
+  SandboxApprovalResult,
+  SandboxApprovalSession,
   ScanRecord,
 } from "../api/types";
 
@@ -32,6 +36,9 @@ export type ScanStage =
   | "authority"
   | "payment"
   | "checkout"
+  | "sandbox_payment"
+  | "sandbox_closing"
+  | "sandbox_complete"
   | "complete"
   | "error";
 
@@ -46,6 +53,8 @@ interface State {
   purchaseIntentId: string | null;
   paymentSession: EmbeddedPaymentSession | null;
   paymentResult: PublicPaymentResult | null;
+  sandboxSession: SandboxApprovalSession | null;
+  sandboxResult: SandboxApprovalResult | null;
   error: { code: string; message: string } | null;
 }
 
@@ -65,6 +74,12 @@ type Action =
   | { type: "select-offer"; offer: Offer }
   | { type: "payment"; session: EmbeddedPaymentSession }
   | { type: "payment-result"; result: PublicPaymentResult; stage: ScanStage }
+  | { type: "sandbox-payment"; session: SandboxApprovalSession }
+  | {
+      type: "sandbox-result";
+      result: SandboxApprovalResult;
+      stage: ScanStage;
+    }
   | { type: "error"; error: unknown }
   | { type: "reset" };
 
@@ -79,6 +94,8 @@ const initialState: State = {
   purchaseIntentId: null,
   paymentSession: null,
   paymentResult: null,
+  sandboxSession: null,
+  sandboxResult: null,
   error: null,
 };
 
@@ -150,6 +167,15 @@ function reducer(state: State, action: Action): State {
       return { ...state, stage: "payment", paymentSession: action.session };
     case "payment-result":
       return { ...state, stage: action.stage, paymentResult: action.result };
+    case "sandbox-payment":
+      return {
+        ...state,
+        stage: "sandbox_payment",
+        sandboxSession: action.session,
+        sandboxResult: null,
+      };
+    case "sandbox-result":
+      return { ...state, stage: action.stage, sandboxResult: action.result };
     case "error":
       return { ...state, stage: "error", error: errorDetails(action.error) };
     case "reset":
@@ -311,6 +337,20 @@ export function useScanFlow() {
     }
   }, [state.scan, state.selectedOffer]);
 
+  const startSandboxApproval = useCallback(async () => {
+    if (!state.scan?.selectedProductId || !state.selectedOffer) return;
+    try {
+      const session = await createSandboxApprovalCheck({
+        scanId: state.scan.id,
+        productId: state.scan.selectedProductId,
+        offerId: state.selectedOffer.id,
+      });
+      dispatch({ type: "sandbox-payment", session });
+    } catch (error) {
+      dispatch({ type: "error", error });
+    }
+  }, [state.scan, state.selectedOffer]);
+
   const confirmCandidate = useCallback(
     async (productId: string) => {
       if (!state.scan) return;
@@ -376,6 +416,57 @@ export function useScanFlow() {
     }
   }, [state.paymentSession]);
 
+  const pollSandboxApproval = useCallback(async () => {
+    if (!state.sandboxSession) return;
+    paymentAbort.current?.abort();
+    const controller = new AbortController();
+    paymentAbort.current = controller;
+    dispatch({ type: "stage", stage: "sandbox_closing" });
+    try {
+      for (
+        let attempt = 0;
+        attempt < 60 && !controller.signal.aborted;
+        attempt += 1
+      ) {
+        const result = await getSandboxApprovalStatus(
+          state.sandboxSession.sandboxCheckId,
+        );
+        if (result.status === "verified") {
+          dispatch({
+            type: "sandbox-result",
+            result,
+            stage: "sandbox_complete",
+          });
+          return;
+        }
+        if (result.status === "failed" || result.status === "expired") {
+          throw Object.assign(new Error(result.message), {
+            code:
+              result.status === "expired"
+                ? "PAYMENT_SESSION_EXPIRED"
+                : "PAYMENT_DECLINED",
+          });
+        }
+        dispatch({
+          type: "sandbox-result",
+          result,
+          stage: "sandbox_closing",
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+      }
+      if (!controller.signal.aborted) {
+        throw Object.assign(
+          new Error(
+            "Prava sandbox confirmation is taking longer than expected.",
+          ),
+          { code: "CHECKOUT_RESULT_UNKNOWN" },
+        );
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) dispatch({ type: "error", error });
+    }
+  }, [state.sandboxSession]);
+
   useEffect(
     () => () => {
       streamAbort.current?.abort();
@@ -392,9 +483,12 @@ export function useScanFlow() {
       confirmCandidate,
       selectOffer: (offer: Offer) => dispatch({ type: "select-offer", offer }),
       requestAuthority,
+      startSandboxApproval,
       approveWithPrava,
       pollPayment,
+      pollSandboxApproval,
       retryInspection,
+      stopWithError: (error: unknown) => dispatch({ type: "error", error }),
       reset: () => dispatch({ type: "reset" }),
     },
   };

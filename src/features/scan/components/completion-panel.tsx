@@ -74,14 +74,30 @@ export function ErrorPanel({
         {message}
       </p>
       <p className="mt-3 font-mono text-[11px] text-postal">{code}</p>
+      {code === "DELIVERY_ADDRESS_REQUIRED" && (
+        <Button className="mt-6 min-h-11 w-full" asChild>
+          <Link to="/account">Add a delivery address</Link>
+        </Button>
+      )}
       {onRetry && (
-        <Button className="mt-6 min-h-11 w-full" onClick={onRetry}>
+        <Button
+          className={
+            code === "DELIVERY_ADDRESS_REQUIRED"
+              ? "mt-2 min-h-11 w-full"
+              : "mt-6 min-h-11 w-full"
+          }
+          onClick={onRetry}
+        >
           Try this inspection again
         </Button>
       )}
       <Button
         variant="outline"
-        className={onRetry ? "mt-2 min-h-11 w-full" : "mt-6 min-h-11 w-full"}
+        className={
+          onRetry || code === "DELIVERY_ADDRESS_REQUIRED"
+            ? "mt-2 min-h-11 w-full"
+            : "mt-6 min-h-11 w-full"
+        }
         onClick={onReset}
       >
         Begin another inspection

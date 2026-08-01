@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as DispatchesRouteImport } from './routes/dispatches'
 import { Route as RequestsRouteImport } from './routes/requests'
@@ -18,6 +19,11 @@ import { Route as ScanRouteImport } from './routes/scan'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArchiveRoute = ArchiveRouteImport.update({
@@ -43,6 +49,7 @@ const ScanRoute = ScanRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/archive': typeof ArchiveRoute
   '/dispatches': typeof DispatchesRoute
   '/requests': typeof RequestsRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/archive': typeof ArchiveRoute
   '/dispatches': typeof DispatchesRoute
   '/requests': typeof RequestsRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/archive': typeof ArchiveRoute
   '/dispatches': typeof DispatchesRoute
   '/requests': typeof RequestsRoute
@@ -65,14 +74,23 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/archive' | '/dispatches' | '/requests' | '/scan'
+  fullPaths:
+    '/' | '/account' | '/archive' | '/dispatches' | '/requests' | '/scan'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/archive' | '/dispatches' | '/requests' | '/scan'
-  id: '__root__' | '/' | '/archive' | '/dispatches' | '/requests' | '/scan'
+  to: '/' | '/account' | '/archive' | '/dispatches' | '/requests' | '/scan'
+  id:
+    | '__root__'
+    | '/'
+    | '/account'
+    | '/archive'
+    | '/dispatches'
+    | '/requests'
+    | '/scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRoute
   ArchiveRoute: typeof ArchiveRoute
   DispatchesRoute: typeof DispatchesRoute
   RequestsRoute: typeof RequestsRoute
@@ -86,6 +104,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/archive': {
@@ -121,6 +146,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRoute,
   ArchiveRoute: ArchiveRoute,
   DispatchesRoute: DispatchesRoute,
   RequestsRoute: RequestsRoute,

@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Camera, Check, CircleAlert } from "lucide-react";
+import { Camera, Check, CircleAlert, FlaskConical } from "lucide-react";
 import {
   EvidenceLedger,
   Plate,
@@ -27,6 +27,7 @@ export function ResultPanel({
   offers,
   checkoutCapability,
   onGet,
+  onSandboxTest,
   onSelectOffer,
   onReject,
 }: {
@@ -36,6 +37,7 @@ export function ResultPanel({
   offers: Offer[];
   checkoutCapability: CheckoutCapability | null;
   onGet: () => void;
+  onSandboxTest: () => void;
   onSelectOffer: (offer: Offer) => void;
   onReject: () => void;
 }) {
@@ -247,6 +249,24 @@ export function ResultPanel({
         </Plate>
       )}
 
+      {offer && checkoutCapability?.sandboxApprovalAvailable && (
+        <Plate className="mt-3 border-primary/35 p-4">
+          <div className="flex gap-3">
+            <FlaskConical
+              className="mt-0.5 h-5 w-5 shrink-0 text-primary"
+              aria-hidden
+            />
+            <div>
+              <p className="font-medium">Sandbox checkout check available</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Verify the real item, merchant, amount, card surface, and
+                passkey flow without moving money or claiming an order.
+              </p>
+            </div>
+          </div>
+        </Plate>
+      )}
+
       <div className="mt-5 flex flex-col gap-2">
         <Button
           className="min-h-12 text-base"
@@ -255,6 +275,16 @@ export function ResultPanel({
         >
           Get this
         </Button>
+        {offer && checkoutCapability?.sandboxApprovalAvailable && (
+          <Button
+            variant={unavailable ? "default" : "outline"}
+            className="min-h-12 text-base"
+            onClick={onSandboxTest}
+          >
+            <FlaskConical className="mr-2 h-4 w-4" aria-hidden />
+            Test with Prava sandbox
+          </Button>
+        )}
         <Button variant="outline" className="min-h-11" onClick={onReject}>
           This is not it
         </Button>
