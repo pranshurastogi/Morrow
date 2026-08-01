@@ -29,7 +29,7 @@ Create PostgreSQL and Redis services, then create two services from this reposit
 - API config path: `backend/railway/api.toml`
 - Worker config path: `backend/railway/worker.toml`
 
-The API service runs migrations before deployment. Both services build from the root Bun lockfile. Give the worker OpenAI, R2, database, and Redis variables. Give the API R2, database, Redis, Prava, auth, and session-encryption variables. Only the worker should receive the restricted merchant checkout executor secret.
+The API service runs migrations before deployment. Both services build from the root Bun lockfile. Give the worker OpenAI, R2, database, Redis, Prava, and account-data-encryption variables. Give the API R2, database, Redis, Prava, auth, session-encryption, and account-data-encryption variables. `ACCOUNT_DATA_ENCRYPTION_KEY` must be the same base64-encoded 32-byte value on both services and must differ from `SESSION_TOKEN_ENCRYPTION_KEY`. Only the worker should receive the restricted merchant checkout executor secret.
 
 Set these on the worker for live catalogue discovery:
 
@@ -86,6 +86,6 @@ not need bucket-administration access.
 4. Deploy worker.
 5. Deploy frontend with the API URL and publishable key.
 6. Test exact, ambiguous, declined, expired, total-changed, and unknown-outcome paths.
-7. Complete a real sandbox checkout and retain its audit/order evidence for the hackathon demo.
+7. Complete the embedded sandbox approval exercise and retain its Prava reference. Then test a full sandbox checkout after the restricted merchant executor is connected; only that path may produce an order record.
 
 Production access requires Prava approval and should remain separate from sandbox configuration.

@@ -7,8 +7,16 @@ Morrow uses Prava's application integration: server-side REST API plus the embed
 - `POST /v1/sessions` with `integration_type: "embedding"`, exactly one destination merchant, a frozen product line, external order reference, and a short-lived amount cap.
 - `GET /v1/sessions/{sessionId}/payment-result` from the backend only.
 - `POST /v1/sessions/{sessionId}/report-status` after a definitive merchant attempt.
+- `GET /v1/listCards` for safe enrolled-card metadata on the authenticated account page.
+- `POST /v1/deleteCard` after an explicit customer confirmation to retire the card's network token.
 
 The browser receives `session_token` and `iframe_url` only for mounting Prava's iframe. It never receives the network token, dynamic CVV, or expiry returned in the `awaiting_result` state.
+
+## Sandbox approval exercise
+
+When the Browser Harness executor is unavailable, Morrow exposes a clearly labelled sandbox-only approval check. It creates an embedded session with the verified offer's real product, merchant, currency, and estimated total. After the card/passkey step, the backend confirms that Prava issued the scoped credential, keeps that credential in memory only, and reports `DECLINED` because no merchant checkout was attempted. The UI records the Prava reference and says **no merchant order was placed**. This prevents a pending session or successful card enrollment from being presented as a purchase.
+
+Delivery addresses are not part of Prava's public application card APIs. Morrow stores them as encrypted, owner-scoped records and releases one only to the restricted checkout worker after purchase approval. Passkeys remain entirely on Prava's secure WebAuthn surface; Morrow does not provide a fake passkey-management API.
 
 ## Wallet authorization
 

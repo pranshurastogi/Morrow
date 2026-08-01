@@ -40,6 +40,10 @@ The first observation uses the lower-latency vision model. A narrow deterministi
 
 `SESSION_TOKEN_ENCRYPTION_KEY` encrypts the short-lived SDK session token for idempotent recovery and it is removed on completion, failure, or expiry. Network token, CVV, and expiry are never persisted.
 
+`ACCOUNT_DATA_ENCRYPTION_KEY` encrypts delivery-address payloads with AES-256-GCM and an address/user-bound authenticated context. The restricted checkout worker decrypts an approved address only when preparing the merchant checkout. Generate this as a separate 32-byte key and set the same value on the API and worker.
+
+The authenticated account API also proxies Prava's safe card-metadata endpoints. It can list enrolled cards and retire a customer-confirmed card/network token; it never receives or returns a PAN. Cards are enrolled and passkeys are created or verified only inside Prava's embedded surface during an approval.
+
 ## Database
 
 Run migrations from the repository root:
@@ -48,7 +52,7 @@ Run migrations from the repository root:
 bun run db:migrate
 ```
 
-The first migration creates the evidence ledger, canonical catalogue, product images, merchant listings, candidates, offers, purchase intents, payment sessions, orders, idempotency records, compatibility graph, Cabinet records, and audit events.
+The migrations create the evidence ledger, canonical catalogue, product images, merchant listings, candidates, offers, purchase intents, payment sessions, orders, idempotency records, compatibility graph, encrypted delivery records, Cabinet records, and audit events.
 
 ## Adding catalogue data
 
