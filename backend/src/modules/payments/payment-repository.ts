@@ -7,6 +7,7 @@ import {
 } from "../../domain/commerce";
 import { getDatabase } from "../../infrastructure/database/client";
 import { databaseJson } from "../../infrastructure/database/json";
+import { resolveUserAddressId } from "../account/address-repository";
 
 export interface PurchaseIntentRecord {
   id: string;
@@ -98,6 +99,11 @@ export async function createPurchaseIntent(
   sql: Sql = getDatabase(),
 ): Promise<PurchaseIntentRecord> {
   return sql.begin(async (transaction) => {
+    const shippingAddressId = await resolveUserAddressId(
+      input.userId,
+      input.shippingAddressId,
+      transaction,
+    );
     const [source] = await transaction`
       select o.*, s.user_id, cp.brand, cp.name, cp.variant, cp.size_value, cp.size_unit,
         cp.gtin, cp.model_number, cp.mpn, sc.classification,
@@ -193,7 +199,7 @@ export async function createPurchaseIntent(
       ) values (
         ${randomUUID()}, ${input.userId}, ${input.scanId}, ${input.productId}, ${input.offerId},
         ${input.quantity}, ${input.maximumAuthorizedTotalMinor}, ${input.currency.toUpperCase()},
-        ${input.shippingAddressId ?? null}, 'DRAFT', ${expiresAt}, ${transaction.json(productSnapshot)},
+        ${shippingAddressId}, 'DRAFT', ${expiresAt}, ${transaction.json(productSnapshot)},
         ${transaction.json(offerSnapshot)}
       ) returning *
     `;

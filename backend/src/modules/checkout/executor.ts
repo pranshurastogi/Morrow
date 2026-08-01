@@ -6,7 +6,17 @@ import type { NormalizedOffer } from "../../domain/commerce";
 export interface RestrictedCheckoutInput {
   paymentSessionId: string;
   offer: NormalizedOffer;
-  shippingAddressReference: string | null;
+  shippingAddress: {
+    reference: string;
+    recipientName: string;
+    line1: string;
+    line2: string | null;
+    city: string;
+    region: string;
+    postalCode: string;
+    countryCode: string;
+    phone: string;
+  };
   authorizedMaximumMinor: number;
   currency: string;
   credential: {

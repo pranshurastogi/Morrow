@@ -65,6 +65,7 @@ const environmentSchema = z.object({
   PRAVA_SECRET_KEY: z.string().min(1).optional(),
   PRAVA_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   SESSION_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
+  ACCOUNT_DATA_ENCRYPTION_KEY: z.string().min(1).optional(),
   MERCHANT_CHECKOUT_EXECUTOR_URL: z.url().optional(),
   MERCHANT_CHECKOUT_EXECUTOR_SECRET: z.string().min(1).optional(),
 
@@ -105,6 +106,7 @@ export function assertRuntimeConfiguration(
       "R2_BUCKET_NAME",
       "PRAVA_SECRET_KEY",
       "SESSION_TOKEN_ENCRYPTION_KEY",
+      "ACCOUNT_DATA_ENCRYPTION_KEY",
     );
   } else {
     required.push(
@@ -114,6 +116,7 @@ export function assertRuntimeConfiguration(
       "R2_BUCKET_NAME",
       "OPENAI_API_KEY",
       "PRAVA_SECRET_KEY",
+      "ACCOUNT_DATA_ENCRYPTION_KEY",
     );
   }
 
@@ -131,12 +134,19 @@ export function assertRuntimeConfiguration(
     throw new Error("AUTH_JWKS_URL is required for the production API");
   }
 
-  if (role === "api" && env.SESSION_TOKEN_ENCRYPTION_KEY) {
-    const decoded = Buffer.from(env.SESSION_TOKEN_ENCRYPTION_KEY, "base64");
-    if (decoded.byteLength !== 32) {
-      throw new Error(
-        "SESSION_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key",
-      );
+  {
+    const encryptionKeys =
+      role === "api"
+        ? ([
+            "SESSION_TOKEN_ENCRYPTION_KEY",
+            "ACCOUNT_DATA_ENCRYPTION_KEY",
+          ] as const)
+        : (["ACCOUNT_DATA_ENCRYPTION_KEY"] as const);
+    for (const name of encryptionKeys) {
+      const value = env[name];
+      if (value && Buffer.from(value, "base64").byteLength !== 32) {
+        throw new Error(`${name} must be a base64-encoded 32-byte key`);
+      }
     }
   }
 

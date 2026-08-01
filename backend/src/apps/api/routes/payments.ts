@@ -13,6 +13,10 @@ import {
   startPaymentSession,
   syncPaymentStatus,
 } from "../../../modules/payments/payment-service";
+import {
+  createSandboxApprovalCheck,
+  getSandboxApprovalStatus,
+} from "../../../modules/payments/sandbox-approval-service";
 
 const intentParamsSchema = z.object({ id: z.uuid() });
 const paymentParamsSchema = z.object({ id: z.uuid() });
@@ -24,6 +28,12 @@ const createIntentSchema = z.object({
   maximumAuthorizedTotalMinor: z.number().int().nonnegative(),
   currency: z.string().length(3),
   shippingAddressId: z.string().min(1).max(255).optional(),
+});
+const sandboxApprovalParamsSchema = z.object({ id: z.uuid() });
+const sandboxApprovalBodySchema = z.object({
+  scanId: z.uuid(),
+  productId: z.uuid(),
+  offerId: z.uuid(),
 });
 
 export const paymentRoutes: FastifyPluginAsync = async (app) => {
@@ -106,6 +116,37 @@ export const paymentRoutes: FastifyPluginAsync = async (app) => {
       const params = paymentParamsSchema.parse(request.params);
       reply.header("Cache-Control", "no-store");
       return syncPaymentStatus(params.id, request.principal.userId);
+    },
+  );
+
+  app.post(
+    "/sandbox-approval-checks",
+    { config: { rateLimit: { max: 3, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      if (!request.principal.email) {
+        throw new MorrowError({
+          code: "INVALID_REQUEST",
+          message: "A verified email is required for Prava sandbox approval",
+        });
+      }
+      const body = sandboxApprovalBodySchema.parse(request.body);
+      const session = await createSandboxApprovalCheck({
+        userId: request.principal.userId,
+        userEmail: request.principal.email,
+        ...body,
+      });
+      reply.header("Cache-Control", "no-store");
+      return session;
+    },
+  );
+
+  app.get(
+    "/sandbox-approval-checks/:id",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const params = sandboxApprovalParamsSchema.parse(request.params);
+      reply.header("Cache-Control", "no-store");
+      return getSandboxApprovalStatus(params.id, request.principal.userId);
     },
   );
 };

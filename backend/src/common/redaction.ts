@@ -16,6 +16,11 @@ const REDACTED_KEYS = new Set([
   "password",
   "cvv",
   "cardNumber",
+  "recipientName",
+  "line1",
+  "line2",
+  "postalCode",
+  "phone",
 ]);
 
 export function redactSensitive<T>(value: T): T {

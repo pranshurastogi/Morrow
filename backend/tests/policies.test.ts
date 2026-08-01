@@ -18,6 +18,7 @@ import {
 } from "../src/modules/recognition/normalization";
 import { assertCandidateMayBeConfirmed } from "../src/modules/matching/confirmation-policy";
 import { isCheckoutExecutorConfigured } from "../src/infrastructure/runtime/checkout-capability";
+import { isPravaSandboxConfigured } from "../src/integrations/prava/environment";
 
 describe("deterministic policies", () => {
   test("normalizes identifiers without inventing barcode digits", () => {
@@ -78,11 +79,11 @@ describe("deterministic policies", () => {
     expect(
       redactSensitive({
         authorization: "Bearer secret",
-        nested: { token: "4111", safe: "kept" },
+        nested: { token: "4111", phone: "+91 99999 99999", safe: "kept" },
       }),
     ).toEqual({
       authorization: "[REDACTED]",
-      nested: { token: "[REDACTED]", safe: "kept" },
+      nested: { token: "[REDACTED]", phone: "[REDACTED]", safe: "kept" },
     });
   });
 
@@ -106,6 +107,21 @@ describe("deterministic policies", () => {
       isCheckoutExecutorConfigured({
         MERCHANT_CHECKOUT_EXECUTOR_URL: "https://executor.example.com",
         MERCHANT_CHECKOUT_EXECUTOR_SECRET: undefined,
+      }),
+    ).toBeFalse();
+  });
+
+  test("offers the sandbox approval path only for the exact sandbox host and test key", () => {
+    expect(
+      isPravaSandboxConfigured({
+        PRAVA_API_URL: "https://sandbox.api.prava.space",
+        PRAVA_SECRET_KEY: "sk_test_example",
+      }),
+    ).toBeTrue();
+    expect(
+      isPravaSandboxConfigured({
+        PRAVA_API_URL: "https://api.prava.space",
+        PRAVA_SECRET_KEY: "sk_live_example",
       }),
     ).toBeFalse();
   });

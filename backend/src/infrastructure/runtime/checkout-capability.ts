@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { MorrowError } from "../../common/errors";
 import { getEnvironment, type AppEnvironment } from "../../config/env";
+import { isPravaSandboxConfigured } from "../../integrations/prava/environment";
 import { getRedisConnection } from "../queue/connection";
 
 const CHECKOUT_CAPABILITY_KEY = "runtime:capability:merchant-checkout";
@@ -18,6 +19,7 @@ const checkoutCapabilitySchema = z.object({
 export interface CheckoutCapability {
   available: boolean;
   message: string | null;
+  sandboxApprovalAvailable: boolean;
 }
 
 export function isCheckoutExecutorConfigured(
@@ -36,6 +38,7 @@ function unavailableCapability(): CheckoutCapability {
     available: false,
     message:
       "Merchant checkout is not connected yet. Morrow will not request card approval until it can verify the order.",
+    sandboxApprovalAvailable: isPravaSandboxConfigured(getEnvironment()),
   };
 }
 
@@ -56,7 +59,13 @@ export async function getCheckoutCapability(): Promise<CheckoutCapability> {
     const state = parseCheckoutCapability(
       await getRedisConnection().get(CHECKOUT_CAPABILITY_KEY),
     );
-    if (state?.available) return { available: true, message: null };
+    if (state?.available) {
+      return {
+        available: true,
+        message: null,
+        sandboxApprovalAvailable: isPravaSandboxConfigured(getEnvironment()),
+      };
+    }
   } catch (error) {
     console.error(
       { error: error instanceof Error ? error.message : String(error) },

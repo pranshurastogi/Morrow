@@ -17,6 +17,7 @@ import {
   markCheckoutInProgress,
   recordCheckoutIssue,
 } from "../payments/payment-repository";
+import { getUserAddress } from "../account/address-repository";
 import { executeRestrictedCheckout } from "./executor";
 
 function wait(milliseconds: number): Promise<void> {
@@ -45,6 +46,18 @@ async function executeCheckoutUnsafe(
     authorizedMaximumMinor: context.maxAuthorizedAmountMinor,
   });
 
+  if (!context.shippingAddressId) {
+    throw new MorrowError({
+      code: "DELIVERY_ADDRESS_REQUIRED",
+      message: "A delivery address is required before merchant checkout",
+      statusCode: 409,
+    });
+  }
+  const address = await getUserAddress(
+    context.shippingAddressId,
+    context.userId,
+  );
+
   await markCheckoutInProgress(paymentSessionId);
   await writeAuditEvent({
     userId: context.userId,
@@ -62,7 +75,17 @@ async function executeCheckoutUnsafe(
   const checkout = await executeRestrictedCheckout({
     paymentSessionId,
     offer: context.offerSnapshot,
-    shippingAddressReference: context.shippingAddressId,
+    shippingAddress: {
+      reference: address.id,
+      recipientName: address.recipientName,
+      line1: address.line1,
+      line2: address.line2 ?? null,
+      city: address.city,
+      region: address.region,
+      postalCode: address.postalCode,
+      countryCode: address.countryCode,
+      phone: address.phone,
+    },
     authorizedMaximumMinor: context.maxAuthorizedAmountMinor,
     currency: context.currency,
     credential: {

@@ -37,8 +37,32 @@ const paymentResultSchema = z.object({
   ),
 });
 
+const cardSchema = z.object({
+  card_id: z.string(),
+  card_last4: z.string(),
+  card_brand: z.string().nullable(),
+  card_exp_month: z.number().int().min(1).max(12).nullable(),
+  card_exp_year: z.number().int().nullable(),
+  is_default: z.boolean(),
+  status: z.enum(["active", "deleted"]),
+  created_at: z.iso.datetime(),
+});
+
+const cardListResponseSchema = z.object({
+  cards: z.array(cardSchema),
+  count: z.number().int().nonnegative(),
+});
+
+const deleteCardResponseSchema = z.object({
+  success: z.boolean(),
+  card_id: z.string(),
+  was_default: z.boolean(),
+  network_token_deleted: z.boolean(),
+});
+
 export type PravaSession = z.infer<typeof sessionResponseSchema>;
 export type PravaPaymentResult = z.infer<typeof paymentResultSchema>;
+export type PravaCard = z.infer<typeof cardSchema>;
 
 export interface CreatePravaSessionInput {
   userId: string;
@@ -64,21 +88,19 @@ export interface CreatePravaSessionInput {
 
 export class PravaApiError extends MorrowError {
   readonly upstreamStatus: number;
+  readonly providerCode: string | null;
 
-  constructor(
-    status: number,
-    message: string,
-    details?: Record<string, unknown>,
-  ) {
+  constructor(status: number, message: string, providerCode: string | null) {
     super({
       code: status >= 500 ? "UPSTREAM_UNAVAILABLE" : "INVALID_REQUEST",
       message,
       statusCode: status >= 500 ? 502 : status,
       retryable: status >= 500 || status === 429,
-      ...(details ? { details } : {}),
+      ...(providerCode ? { details: { providerCode } } : {}),
     });
     this.name = "PravaApiError";
     this.upstreamStatus = status;
+    this.providerCode = providerCode;
   }
 }
 
@@ -108,7 +130,11 @@ async function pravaFetch(path: string, init: RequestInit): Promise<unknown> {
       error && typeof error === "object" && "message" in error
         ? String(error.message)
         : `Prava request failed with HTTP ${response.status}`;
-    throw new PravaApiError(response.status, message, { providerCode: error });
+    const providerCode =
+      error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : null;
+    throw new PravaApiError(response.status, message, providerCode);
   }
   return body;
 }
@@ -163,6 +189,43 @@ export async function getPravaPaymentResult(
     },
   );
   return paymentResultSchema.parse(body);
+}
+
+export async function listPravaCards(customerId: string): Promise<PravaCard[]> {
+  try {
+    const query = new URLSearchParams({
+      customer_id: customerId,
+      status: "active",
+    });
+    const body = await pravaFetch(`/v1/listCards?${query}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    return cardListResponseSchema.parse(body).cards;
+  } catch (error) {
+    if (
+      error instanceof PravaApiError &&
+      error.providerCode === "CUSTOMER_NOT_FOUND"
+    ) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function deletePravaCard(input: {
+  customerId: string;
+  cardId: string;
+}) {
+  const body = await pravaFetch("/v1/deleteCard", {
+    method: "POST",
+    body: JSON.stringify({
+      customer_id: input.customerId,
+      card_id: input.cardId,
+      reason: "CUSTOMER_CONFIRMED",
+    }),
+  });
+  return deleteCardResponseSchema.parse(body);
 }
 
 export async function reportPravaStatus(input: {
