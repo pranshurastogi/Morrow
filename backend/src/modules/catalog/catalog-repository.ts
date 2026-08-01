@@ -11,6 +11,7 @@ import type {
   CanonicalProductCandidate,
 } from "../matching/verification";
 import {
+  jaccardSimilarity,
   normalizeBarcode,
   normalizeIdentifier,
 } from "../recognition/normalization";
@@ -167,7 +168,7 @@ export async function retrieveCandidates(
   const preferredIds = [...new Set(input.preferredProductIds ?? [])];
   const preferredPromise = preferredIds.length
     ? sql`
-        select *, 1::float as retrieval_score
+        select *, 0.35::float as retrieval_score
         from canonical_products where id in ${sql(preferredIds)}
       `
     : Promise.resolve([]);
@@ -216,12 +217,31 @@ export async function retrieveCandidates(
     }
   };
   ingest(identifierRows, 1);
-  ingest(preferredRows, 0.92);
+  ingest(preferredRows, 0.5);
   ingest(textRows, 0.72);
   ingest(vectorRows, 0.62);
   ingest(historyRows, 0.8, true);
 
   const ranked = [...candidates.values()]
+    .map((candidate) => {
+      const candidateText = [
+        candidate.brand,
+        candidate.name,
+        candidate.variant,
+        candidate.size
+          ? `${candidate.size.value} ${candidate.size.unit}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return {
+        ...candidate,
+        retrievalScore: Math.max(
+          candidate.retrievalScore,
+          jaccardSimilarity(query, candidateText) * 0.85,
+        ),
+      };
+    })
     .sort((a, b) => b.retrievalScore - a.retrievalScore)
     .slice(0, 10);
   if (ranked.length === 0) return [];

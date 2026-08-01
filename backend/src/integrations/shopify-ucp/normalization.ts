@@ -129,7 +129,7 @@ export interface NormalizedUcpVariant {
   modelNumber: string | null;
   imageUrl: string | null;
   merchantName: string;
-  merchantCountryCode: "IN" | null;
+  merchantCountryCode: string | null;
   merchantPublicDomain: string;
   merchantUcpDomain: string;
   merchantEndpoint: string;
@@ -149,8 +149,15 @@ export function normalizeUcpVariant(input: {
   variant: UcpVariant;
   observation: ProductObservation;
   sourceEndpoint?: string;
+  sourceMerchantCountryCode?: string;
 }): NormalizedUcpVariant {
-  const { product, variant, observation, sourceEndpoint } = input;
+  const {
+    product,
+    variant,
+    observation,
+    sourceEndpoint,
+    sourceMerchantCountryCode,
+  } = input;
   const meaningfulOptions = variant.options.filter(
     // Shopify uses `Title` as the synthetic option for single-variant
     // products. It is not a real variant dimension and must not split the same
@@ -237,7 +244,10 @@ export function normalizeUcpVariant(input: {
     imageUrl,
     merchantName:
       variant.seller?.name ?? registryMerchant?.name ?? merchantPublicDomain,
-    merchantCountryCode: registryMerchant ? "IN" : null,
+    merchantCountryCode:
+      registryMerchant !== undefined
+        ? "IN"
+        : (sourceMerchantCountryCode?.toUpperCase() ?? null),
     merchantPublicDomain,
     merchantUcpDomain,
     merchantEndpoint,
@@ -259,6 +269,9 @@ export function normalizeUcpVariant(input: {
       source_product_id: product.id,
       source_variant_id: variant.id,
       source_merchant_domain: merchantUcpDomain,
+      ...(sourceMerchantCountryCode
+        ? { merchant_country_code: sourceMerchantCountryCode.toUpperCase() }
+        : {}),
       ucp_endpoint: merchantEndpoint,
       ...(size ? { size_value: String(size.value), size_unit: size.unit } : {}),
       ...(gtin ? { gtin } : {}),

@@ -1,8 +1,10 @@
 import type { NormalizedOffer } from "../../domain/commerce";
 import type { CanonicalProductCandidate } from "../matching/verification";
 import {
+  jaccardSimilarity,
   normalizeBarcode,
   normalizeIdentifier,
+  normalizeText,
   sizesEquivalent,
 } from "../recognition/normalization";
 import { normalizedSizeSchema } from "../../domain/product-observation";
@@ -16,6 +18,139 @@ function listingAttribute(
     if (value) return value;
   }
   return null;
+}
+
+export interface CatalogEquivalence {
+  status: "verified" | "likely" | "rejected";
+  score: number;
+  contradictions: string[];
+  basis:
+    | "same_catalogue_record"
+    | "exact_identifier"
+    | "brand_store_bridge"
+    | "unproven";
+}
+
+function productBarcode(product: CanonicalProductCandidate): string | null {
+  return product.gtin ?? product.ean ?? product.upc;
+}
+
+function sameProductIdentifier(
+  left: string | null,
+  right: string | null,
+  normalizer: (value: string) => string | null,
+): boolean | null {
+  if (!left || !right) return null;
+  return normalizer(left) === normalizer(right);
+}
+
+/**
+ * Proves that a sellable UCP record represents the already-verified product.
+ * The brand-store bridge is intentionally narrow: it requires an identifier
+ * on the selected record, an official registered storefront, exact brand and
+ * size agreement, and strong deterministic title overlap.
+ */
+export function verifyCatalogEquivalence(input: {
+  selected: CanonicalProductCandidate;
+  listingProduct: CanonicalProductCandidate;
+  officialBrandStore: boolean;
+}): CatalogEquivalence {
+  const { selected, listingProduct } = input;
+  if (selected.id === listingProduct.id) {
+    return {
+      status: "verified",
+      score: 1,
+      contradictions: [],
+      basis: "same_catalogue_record",
+    };
+  }
+
+  const contradictions: string[] = [];
+  const barcodeMatch = sameProductIdentifier(
+    productBarcode(selected),
+    productBarcode(listingProduct),
+    normalizeBarcode,
+  );
+  const modelMatch = sameProductIdentifier(
+    selected.modelNumber,
+    listingProduct.modelNumber,
+    normalizeIdentifier,
+  );
+  const partMatch = sameProductIdentifier(
+    selected.mpn,
+    listingProduct.mpn,
+    normalizeIdentifier,
+  );
+  if (barcodeMatch === false) contradictions.push("Catalogue barcode differs");
+  if (modelMatch === false)
+    contradictions.push("Catalogue model number differs");
+  if (partMatch === false) contradictions.push("Catalogue part number differs");
+
+  const selectedBrand = normalizeText(selected.brand ?? "");
+  const listingBrand = normalizeText(listingProduct.brand ?? "");
+  const brandMatch =
+    Boolean(selectedBrand && listingBrand) && selectedBrand === listingBrand;
+  if (selectedBrand && listingBrand && !brandMatch) {
+    contradictions.push("Catalogue brand differs");
+  }
+
+  const sizeMatch =
+    selected.size && listingProduct.size
+      ? sizesEquivalent(selected.size, listingProduct.size)
+      : selected.size
+        ? false
+        : null;
+  if (sizeMatch === false)
+    contradictions.push("Catalogue package size differs");
+
+  if (contradictions.length > 0) {
+    return {
+      status: "rejected",
+      score: 0,
+      contradictions,
+      basis: "unproven",
+    };
+  }
+  if (barcodeMatch || modelMatch || partMatch) {
+    return {
+      status: "verified",
+      score: 0.98,
+      contradictions: [],
+      basis: "exact_identifier",
+    };
+  }
+
+  const selectedHasIdentifier = Boolean(
+    productBarcode(selected) ?? selected.modelNumber ?? selected.mpn,
+  );
+  const titleSimilarity = jaccardSimilarity(
+    [selected.brand, selected.name, selected.variant].filter(Boolean).join(" "),
+    [listingProduct.brand, listingProduct.name, listingProduct.variant]
+      .filter(Boolean)
+      .join(" "),
+  );
+  if (
+    selectedHasIdentifier &&
+    input.officialBrandStore &&
+    brandMatch &&
+    sizeMatch !== false &&
+    titleSimilarity >= 0.4
+  ) {
+    return {
+      status: "verified",
+      score: Math.min(0.94, 0.78 + titleSimilarity * 0.2),
+      contradictions: [],
+      basis: "brand_store_bridge",
+    };
+  }
+  return {
+    status: "likely",
+    score: Math.min(0.74, titleSimilarity),
+    contradictions: [
+      "The merchant record is not linked by an exact identifier or official brand-store proof",
+    ],
+    basis: "unproven",
+  };
 }
 
 export function verifyMerchantVariant(

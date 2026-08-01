@@ -21,7 +21,10 @@ import {
   verifyCandidate,
 } from "../matching/verification";
 import { determineNextCapture } from "../matching/capture-policy";
-import { searchVerifiedListings } from "../offers/offer-repository";
+import {
+  isPurchasableOffer,
+  searchVerifiedListings,
+} from "../offers/offer-repository";
 import { detectBarcode } from "./barcode";
 import { derivedObjectKeys, prepareImage } from "./image-preparation";
 import { observeProduct, shouldEscalateObservation } from "./openai-observer";
@@ -212,7 +215,7 @@ export async function processScan(scanId: string): Promise<void> {
             currency: scan.currency ?? "INR",
           });
           discoveredProductIds = await ingestUcpCatalog({
-            results: discovery,
+            results: discovery.results,
             observation: scan.observation,
           });
           if (discoveredProductIds.length > 0) {
@@ -231,6 +234,17 @@ export async function processScan(scanId: string): Promise<void> {
             payload: {
               provider: "shopify_ucp",
               candidateCount: discoveredProductIds.length,
+              productCount: discovery.productCount,
+              attempts: discovery.attempts.length,
+              successfulAttempts: discovery.attempts.filter(
+                (attempt) => attempt.status === "succeeded",
+              ).length,
+              failedAttempts: discovery.attempts.filter(
+                (attempt) => attempt.status === "failed",
+              ).length,
+              routes: [
+                ...new Set(discovery.attempts.map((attempt) => attempt.route)),
+              ],
             },
           });
         } catch (error) {
@@ -351,11 +365,30 @@ export async function processScan(scanId: string): Promise<void> {
               : { maxTotalMinor: scan.maxBudgetMinor }),
           },
         });
+        const purchasableOffers = offers.filter(isPurchasableOffer);
+        const rejectionReasons = [
+          ...new Set(offers.flatMap((offer) => offer.rejectedReasons)),
+        ];
+        await writeAuditEvent({
+          userId: scan.userId,
+          entityType: "scan",
+          entityId: scan.id,
+          eventType: "MERCHANT_OFFERS_EVALUATED",
+          actorType: "policy",
+          payload: {
+            listingCount: offers.length,
+            purchasableCount: purchasableOffers.length,
+            rejectionReasons,
+          },
+        });
         await transitionScan(scanId, "OFFERS_READY", {
-          errorCode: offers.length === 0 ? "PRODUCT_NOT_AVAILABLE" : null,
+          errorCode:
+            purchasableOffers.length === 0 ? "PRODUCT_NOT_AVAILABLE" : null,
           errorMessage:
-            offers.length === 0
-              ? "No current verified merchant offer is available"
+            purchasableOffers.length === 0
+              ? offers.length === 0
+                ? "No current India merchant listing is available for this exact product."
+                : "Listings were found, but no exact in-stock variant passed identity, currency, and budget checks."
               : null,
         });
         return;

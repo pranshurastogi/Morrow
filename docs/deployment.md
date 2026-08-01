@@ -39,6 +39,7 @@ UCP_GLOBAL_CATALOG_URL=https://catalog.shopify.com/api/ucp/mcp
 UCP_AGENT_PROFILE_URL=https://<api-domain>/.well-known/ucp
 UCP_REQUEST_TIMEOUT_MS=12000
 UCP_MAX_PRODUCTS=8
+UCP_MAX_MERCHANTS_PER_SCAN=6
 ```
 
 The API profile URL must be publicly reachable over HTTPS before replacing Shopify's development fixture. No Shopify secret is required for public catalogue search or anonymous Cart MCP estimates. Authenticated checkout completion is a separate credentialed integration.

@@ -1,16 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import type { ProductObservation } from "../src/domain/product-observation";
-import { buildCatalogQuery } from "../src/integrations/shopify-ucp/discovery";
+import {
+  buildCatalogQuery,
+  buildRelaxedCatalogQuery,
+} from "../src/integrations/shopify-ucp/discovery";
 import { catalogIdentityKey } from "../src/integrations/shopify-ucp/catalog-ingestion";
 import {
   normalizeUcpVariant,
   parseCatalogSize,
 } from "../src/integrations/shopify-ucp/normalization";
 import {
+  extractUcpSearchContent,
   ucpCartResponseSchema,
   ucpProductSchema,
+  ucpSearchResponseSchema,
 } from "../src/integrations/shopify-ucp/schemas";
 import { assertAllowedUcpEndpoint } from "../src/integrations/shopify-ucp/client";
+import {
+  brandIndianMerchants,
+  relevantIndianMerchants,
+} from "../src/integrations/shopify-ucp/merchant-registry";
 
 const observation: ProductObservation = {
   category: "skincare",
@@ -37,6 +46,38 @@ describe("Shopify UCP catalogue normalization", () => {
     expect(buildCatalogQuery(observation)).toBe(
       "Minimalist Niacinamide 10% Face Serum 30 ml",
     );
+  });
+
+  test("builds a relaxed fallback query without dropping the observed product", () => {
+    expect(buildRelaxedCatalogQuery(observation)).toBe(
+      "Minimalist Niacinamide 10% Face Serum",
+    );
+  });
+
+  test("routes both the exact brand store and relevant category storefronts", () => {
+    const merchants = relevantIndianMerchants(observation, 6);
+    expect(merchants[0]?.name).toBe("Minimalist");
+    expect(
+      merchants.some((merchant) => merchant.category === "skin care"),
+    ).toBe(true);
+
+    const categoryOnly = relevantIndianMerchants(
+      { ...observation, brand: "Unlisted Laboratory" },
+      4,
+    );
+    expect(categoryOnly).toHaveLength(4);
+    expect(
+      categoryOnly.every((merchant) => merchant.category.includes("skin care")),
+    ).toBe(true);
+  });
+
+  test("resolves common brand spellings and registered portfolio aliases", () => {
+    expect(brandIndianMerchants("Dot and Key")[0]?.name).toBe("Dot & Key");
+    expect(brandIndianMerchants("The Derma Co.")[0]?.name).toBe("TheDermaCo");
+    expect(brandIndianMerchants("Rare Rabbit")[0]?.name).toBe(
+      "The House of Rare",
+    );
+    expect(brandIndianMerchants("Bare Anatomy")[0]?.name).toBe("Innovist");
   });
 
   test("normalizes common catalogue size labels", () => {
@@ -178,6 +219,22 @@ describe("Shopify UCP catalogue normalization", () => {
       ucpCartResponseSchema.parse(response({ cart })).result?.structuredContent
         .id,
     ).toBe(cart.id);
+  });
+
+  test("accepts the standard MCP text-content fallback envelope", () => {
+    const content = {
+      ucp: { version: "2026-04-08" },
+      products: [],
+      messages: [],
+    };
+    const response = ucpSearchResponseSchema.parse({
+      jsonrpc: "2.0",
+      id: "fallback",
+      result: {
+        content: [{ type: "text", text: JSON.stringify(content) }],
+      },
+    });
+    expect(extractUcpSearchContent(response)?.ucp.version).toBe("2026-04-08");
   });
 
   test("rejects a catalogue endpoint that could become an SSRF target", () => {

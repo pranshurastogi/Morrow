@@ -3,6 +3,7 @@ import { normalizeText } from "../../modules/recognition/normalization";
 
 export interface UcpMerchantDefinition {
   name: string;
+  brandAliases?: readonly string[];
   category: string;
   domain: string;
   endpoint: string;
@@ -23,6 +24,7 @@ export const INDIA_UCP_MERCHANTS: readonly UcpMerchantDefinition[] = [
   },
   {
     name: "TheDermaCo",
+    brandAliases: ["The Derma Co"],
     category: "skin care",
     domain: "thedermaco.com",
     endpoint: "https://thedermaco.myshopify.com/api/ucp/mcp",
@@ -59,6 +61,7 @@ export const INDIA_UCP_MERCHANTS: readonly UcpMerchantDefinition[] = [
   },
   {
     name: "Dot & Key",
+    brandAliases: ["Dot and Key"],
     category: "skin care",
     domain: "dotandkey.com",
     endpoint: "https://dot-key.myshopify.com/api/ucp/mcp",
@@ -83,6 +86,7 @@ export const INDIA_UCP_MERCHANTS: readonly UcpMerchantDefinition[] = [
   },
   {
     name: "The House of Rare",
+    brandAliases: ["Rare Rabbit", "Rareism"],
     category: "clothing",
     domain: "thehouseofrare.com",
     endpoint: "https://rarerabbit.myshopify.com/api/ucp/mcp",
@@ -215,6 +219,7 @@ export const INDIA_UCP_MERCHANTS: readonly UcpMerchantDefinition[] = [
   },
   {
     name: "Innovist",
+    brandAliases: ["Bare Anatomy", "Chemist at Play", "SunScoop"],
     category: "skin care hair care",
     domain: "innovist.com",
     endpoint: "https://bareanatomy.myshopify.com/api/ucp/mcp",
@@ -311,34 +316,134 @@ export const INDIA_UCP_MERCHANTS: readonly UcpMerchantDefinition[] = [
   },
 ] as const;
 
+const BRAND_CONNECTORS = new Set([
+  "and",
+  "the",
+  "company",
+  "co",
+  "india",
+  "lifestyle",
+  "apparels",
+  "wellness",
+]);
+
+function brandFingerprint(value: string): string {
+  return normalizeText(value)
+    .split(" ")
+    .filter((token) => token && !BRAND_CONNECTORS.has(token))
+    .join("");
+}
+
+function merchantMatchesBrand(
+  merchant: UcpMerchantDefinition,
+  brand: string,
+): boolean {
+  const normalizedBrand = normalizeText(brand);
+  const brandKey = brandFingerprint(brand);
+  if (!normalizedBrand || brandKey.length < 3) return false;
+  return [merchant.name, ...(merchant.brandAliases ?? [])].some((name) => {
+    const normalizedName = normalizeText(name);
+    const nameKey = brandFingerprint(name);
+    return (
+      normalizedBrand.includes(normalizedName) ||
+      normalizedName.includes(normalizedBrand) ||
+      brandKey === nameKey ||
+      (Math.min(brandKey.length, nameKey.length) >= 4 &&
+        (brandKey.includes(nameKey) || nameKey.includes(brandKey)))
+    );
+  });
+}
+
 function relevanceScore(
   merchant: UcpMerchantDefinition,
   observation: ProductObservation,
 ): number {
   const brand = normalizeText(observation.brand ?? "");
-  const name = normalizeText(merchant.name);
-  const category = normalizeText(
-    [observation.category, observation.subcategory].filter(Boolean).join(" "),
+  const routeText = normalizeText(
+    [
+      observation.category,
+      observation.subcategory,
+      observation.productName,
+      ...observation.distinctiveFeatures,
+    ]
+      .filter(Boolean)
+      .join(" "),
   );
   let score = 0;
-  if (brand && (brand.includes(name) || name.includes(brand))) score += 10;
-  for (const token of category.split(" ")) {
-    if (token.length > 2 && normalizeText(merchant.category).includes(token)) {
-      score += 1;
+  if (brand && merchantMatchesBrand(merchant, brand)) score += 100;
+
+  const concepts: ReadonlyArray<ReadonlyArray<string>> = [
+    ["skin care", "skincare", "serum", "sunscreen", "cleanser", "moisturizer"],
+    ["hair care", "haircare", "shampoo", "conditioner"],
+    [
+      "consumer electronics",
+      "electronic",
+      "electronics",
+      "earbuds",
+      "headphones",
+      "audio",
+    ],
+    ["electronic accessories", "charger", "cable", "power bank", "adapter"],
+    ["clothing", "apparel", "shirt", "dress", "kurta", "trouser"],
+    ["footwear", "shoe", "shoes", "sneaker", "sandals"],
+    ["jewelry", "jewellery", "necklace", "ring", "earring"],
+    ["health supplements", "supplement", "nutrition", "wellness", "ayurvedic"],
+    ["makeup cosmetics", "makeup", "cosmetic", "lipstick", "foundation"],
+    ["home furniture", "furniture", "mattress", "chair", "sofa"],
+    ["home kitchen", "kitchen", "bottle", "cookware", "container"],
+    [
+      "luggage travel accessories",
+      "luggage",
+      "backpack",
+      "suitcase",
+      "travel bag",
+    ],
+    ["books education", "book", "books", "education", "exam"],
+    ["sports apparel", "sports", "swimwear", "fitness"],
+    ["pets", "pet", "dog", "cat"],
+    ["fragrance", "perfume", "attar", "deodorant"],
+    ["personal health", "sexual wellness", "contraceptive"],
+  ];
+  const merchantCategory = normalizeText(merchant.category);
+  for (const aliases of concepts) {
+    const merchantMatches = aliases.some((alias) =>
+      merchantCategory.includes(normalizeText(alias)),
+    );
+    const observationMatches = aliases.some((alias) =>
+      routeText.includes(normalizeText(alias)),
+    );
+    if (merchantMatches && observationMatches) score += 12;
+  }
+
+  const merchantTokens = merchantCategory.split(" ");
+  const routeTokens = new Set(routeText.split(" "));
+  for (const token of merchantTokens) {
+    if (token.length > 2 && routeTokens.has(token)) {
+      score += 2;
     }
   }
   return score;
 }
 
+export function brandIndianMerchants(
+  brand: string | null | undefined,
+): UcpMerchantDefinition[] {
+  const normalizedBrand = normalizeText(brand ?? "");
+  if (!normalizedBrand) return [];
+  return INDIA_UCP_MERCHANTS.filter((merchant) =>
+    merchantMatchesBrand(merchant, normalizedBrand),
+  );
+}
+
 export function relevantIndianMerchants(
   observation: ProductObservation,
-  limit = 2,
+  limit = 6,
 ): UcpMerchantDefinition[] {
   return INDIA_UCP_MERCHANTS.map((merchant) => ({
     merchant,
     score: relevanceScore(merchant, observation),
   }))
-    .filter((item) => item.score >= 10)
+    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((item) => item.merchant);

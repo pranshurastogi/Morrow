@@ -1,55 +1,85 @@
-import { ucpSearchResponseSchema } from "../../backend/src/integrations/shopify-ucp/schemas";
+import { searchUcpCatalog } from "../../backend/src/integrations/shopify-ucp/client";
+import { INDIA_UCP_MERCHANTS } from "../../backend/src/integrations/shopify-ucp/merchant-registry";
 
+const args = process.argv.slice(2);
+const probeAll = args.includes("--all");
 const query =
-  process.argv.slice(2).join(" ").trim() || "Minimalist niacinamide serum";
-const endpoint =
-  process.env.UCP_GLOBAL_CATALOG_URL ??
-  "https://catalog.shopify.com/api/ucp/mcp";
-const profile =
-  process.env.UCP_AGENT_PROFILE_URL ??
-  "https://shopify.dev/ucp/agent-profiles/2026-04-08/valid-with-capabilities.json";
+  args
+    .filter((argument) => argument !== "--all")
+    .join(" ")
+    .trim() || "Minimalist niacinamide serum";
+const countryCode = "IN";
+const currency = "INR";
 
-const response = await fetch(endpoint, {
-  method: "POST",
-  headers: { Accept: "application/json", "Content-Type": "application/json" },
-  body: JSON.stringify({
-    jsonrpc: "2.0",
-    id: "morrow-catalog-probe",
-    method: "tools/call",
-    params: {
-      name: "search_catalog",
-      arguments: {
-        meta: { "ucp-agent": { profile } },
-        catalog: {
-          query,
-          context: { address_country: "IN", currency: "INR" },
-          pagination: { limit: 3 },
-        },
-      },
-    },
-  }),
-  signal: AbortSignal.timeout(15_000),
-});
+async function probe(endpoint: string, searchQuery: string) {
+  return searchUcpCatalog({
+    endpoint,
+    query: searchQuery,
+    countryCode,
+    currency,
+    intent: "Validate Morrow merchant catalogue connectivity.",
+    limit: probeAll ? 1 : 3,
+  });
+}
 
-if (!response.ok) {
-  throw new Error(`UCP probe failed with HTTP ${response.status}`);
+if (probeAll) {
+  const rows: Array<{
+    merchant: string;
+    endpoint: string;
+    status: "ready" | "failed";
+    products: number;
+    sample: string;
+  }> = [];
+  const queue = [...INDIA_UCP_MERCHANTS];
+  const workers = Array.from({ length: 6 }, async () => {
+    while (queue.length > 0) {
+      const merchant = queue.shift();
+      if (!merchant) return;
+      try {
+        const result = await probe(merchant.endpoint, merchant.name);
+        rows.push({
+          merchant: merchant.name,
+          endpoint: new URL(merchant.endpoint).hostname,
+          status: "ready",
+          products: result.products.length,
+          sample: result.products[0]?.title ?? "No matching product",
+        });
+      } catch (error) {
+        rows.push({
+          merchant: merchant.name,
+          endpoint: new URL(merchant.endpoint).hostname,
+          status: "failed",
+          products: 0,
+          sample: error instanceof Error ? error.message : "Unknown failure",
+        });
+      }
+    }
+  });
+  await Promise.all(workers);
+  rows.sort((left, right) => left.merchant.localeCompare(right.merchant));
+  console.table(rows);
+  const ready = rows.filter((row) => row.status === "ready").length;
+  console.log(
+    `${ready}/${rows.length} registered Indian UCP catalogues responded.`,
+  );
+  if (ready === 0) process.exitCode = 1;
+} else {
+  const endpoint =
+    process.env.UCP_GLOBAL_CATALOG_URL ??
+    "https://catalog.shopify.com/api/ucp/mcp";
+  const result = await probe(endpoint, query);
+  console.table(
+    result.products.flatMap((product) =>
+      product.variants.slice(0, 2).map((variant) => ({
+        product: product.title,
+        variant: variant.options.map((option) => option.label).join(", "),
+        merchant:
+          variant.seller?.name ??
+          variant.seller?.domain ??
+          (variant.url ? new URL(variant.url).hostname : "catalog result"),
+        price: `${(variant.price.amount / 100).toFixed(2)} ${variant.price.currency}`,
+        available: variant.availability?.available ?? "unknown",
+      })),
+    ),
+  );
 }
-const parsed = ucpSearchResponseSchema.parse(await response.json());
-if (parsed.error) {
-  throw new Error(`UCP ${parsed.error.code}: ${parsed.error.message}`);
-}
-const products = parsed.result?.structuredContent.products ?? [];
-console.table(
-  products.flatMap((product) =>
-    product.variants.slice(0, 2).map((variant) => ({
-      product: product.title,
-      variant: variant.options.map((option) => option.label).join(", "),
-      merchant:
-        variant.seller?.name ??
-        variant.seller?.domain ??
-        (variant.url ? new URL(variant.url).hostname : "catalog result"),
-      price: `${(variant.price.amount / 100).toFixed(2)} ${variant.price.currency}`,
-      available: variant.availability?.available ?? "unknown",
-    })),
-  ),
-);

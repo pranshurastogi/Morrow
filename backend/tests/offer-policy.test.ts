@@ -3,6 +3,7 @@ import type { NormalizedOffer } from "../src/domain/commerce";
 import type { CanonicalProductCandidate } from "../src/modules/matching/verification";
 import {
   rankOffers,
+  verifyCatalogEquivalence,
   verifyMerchantVariant,
 } from "../src/modules/offers/offer-policy";
 
@@ -118,5 +119,53 @@ describe("merchant offer policy", () => {
     });
     expect(ranked?.rankingScore).toBe(0);
     expect(ranked?.rejectedReasons).toContain("Exceeds the approved budget");
+  });
+
+  test("bridges an identifier-verified product to its official brand storefront", () => {
+    const storefrontProduct: CanonicalProductCandidate = {
+      ...product,
+      id: "storefront-product",
+      gtin: null,
+      name: "CeraVe Foaming Facial Cleanser for Normal to Oily Skin",
+      attributes: {},
+    };
+    const proof = verifyCatalogEquivalence({
+      selected: product,
+      listingProduct: storefrontProduct,
+      officialBrandStore: true,
+    });
+    expect(proof.status).toBe("verified");
+    expect(proof.basis).toBe("brand_store_bridge");
+  });
+
+  test("does not bridge a retailer title without official-store provenance", () => {
+    const retailerProduct: CanonicalProductCandidate = {
+      ...product,
+      id: "retailer-product",
+      gtin: null,
+    };
+    expect(
+      verifyCatalogEquivalence({
+        selected: product,
+        listingProduct: retailerProduct,
+        officialBrandStore: false,
+      }).status,
+    ).toBe("likely");
+  });
+
+  test("rejects a brand-store bridge when the package size differs", () => {
+    const wrongSize: CanonicalProductCandidate = {
+      ...product,
+      id: "wrong-size",
+      gtin: null,
+      size: { value: 236, unit: "ml" },
+    };
+    expect(
+      verifyCatalogEquivalence({
+        selected: product,
+        listingProduct: wrongSize,
+        officialBrandStore: true,
+      }).status,
+    ).toBe("rejected");
   });
 });

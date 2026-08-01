@@ -87,7 +87,14 @@ export const ucpSearchResponseSchema = z
     id: z.union([z.string(), z.number()]),
     result: z
       .object({
-        structuredContent: ucpStructuredContentSchema,
+        structuredContent: ucpStructuredContentSchema.optional(),
+        content: z
+          .array(
+            z
+              .object({ type: z.string(), text: z.string().optional() })
+              .passthrough(),
+          )
+          .optional(),
         isError: z.boolean().optional(),
       })
       .passthrough()
@@ -157,4 +164,26 @@ export type UcpVariant = z.infer<typeof ucpVariantSchema>;
 export interface UcpCatalogResult {
   products: UcpProduct[];
   sourceEndpoint: string;
+  sourceMerchantCountryCode: string;
+  query: string;
+}
+
+export function extractUcpSearchContent(
+  response: z.infer<typeof ucpSearchResponseSchema>,
+): z.infer<typeof ucpStructuredContentSchema> | null {
+  if (response.result?.structuredContent) {
+    return response.result.structuredContent;
+  }
+  for (const item of response.result?.content ?? []) {
+    if (item.type !== "text" || !item.text) continue;
+    try {
+      const parsed = ucpStructuredContentSchema.safeParse(
+        JSON.parse(item.text),
+      );
+      if (parsed.success) return parsed.data;
+    } catch {
+      // A human-readable MCP message is not a structured catalogue response.
+    }
+  }
+  return null;
 }

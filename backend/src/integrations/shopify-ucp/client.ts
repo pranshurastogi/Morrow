@@ -1,8 +1,11 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { MorrowError } from "../../common/errors";
 import { getEnvironment } from "../../config/env";
-import { rememberJson } from "../../infrastructure/cache/json-cache";
-import { ucpSearchResponseSchema, type UcpCatalogResult } from "./schemas";
+import {
+  extractUcpSearchContent,
+  ucpSearchResponseSchema,
+  type UcpCatalogResult,
+} from "./schemas";
 import { INDIA_UCP_MERCHANTS } from "./merchant-registry";
 
 export function assertAllowedUcpEndpoint(endpoint: string): URL {
@@ -89,6 +92,8 @@ export async function searchUcpCatalog(input: {
   limit: number;
 }): Promise<UcpCatalogResult> {
   const env = getEnvironment();
+  const endpoint = assertAllowedUcpEndpoint(input.endpoint);
+  const globalCatalog = endpoint.hostname === "catalog.shopify.com";
   const request = {
     meta: { "ucp-agent": { profile: env.UCP_AGENT_PROFILE_URL } },
     catalog: {
@@ -98,19 +103,26 @@ export async function searchUcpCatalog(input: {
         currency: input.currency,
         intent: input.intent,
       },
+      ...(globalCatalog
+        ? {
+            filters: {
+              available: true,
+              ships_to: { country: input.countryCode.toUpperCase() },
+              ships_from: [{ country: input.countryCode.toUpperCase() }],
+            },
+          }
+        : {}),
       pagination: { limit: input.limit },
     },
   };
-  const digest = createHash("sha256")
-    .update(`${input.endpoint}:${JSON.stringify(request)}`)
-    .digest("hex");
-  const raw = await rememberJson(`ucp:search:${digest}`, 10 * 60, () =>
-    callUcpTool({
-      endpoint: input.endpoint,
-      method: "search_catalog",
-      arguments: request,
-    }),
-  );
+  // Shopify catalogue responses carry live availability and merchant pricing.
+  // They must be fetched fresh; persisting normalized rows gives us auditability
+  // without serving a cached provider response as current inventory.
+  const raw = await callUcpTool({
+    endpoint: input.endpoint,
+    method: "search_catalog",
+    arguments: request,
+  });
   const parsed = ucpSearchResponseSchema.safeParse(raw);
   if (!parsed.success) {
     throw new MorrowError({
@@ -133,8 +145,20 @@ export async function searchUcpCatalog(input: {
       },
     });
   }
+  const content = extractUcpSearchContent(parsed.data);
+  if (!content) {
+    throw new MorrowError({
+      code: "UPSTREAM_UNAVAILABLE",
+      message: "A merchant catalogue returned an unsupported response",
+      statusCode: 502,
+      retryable: true,
+      details: { provider: "shopify_ucp" },
+    });
+  }
   return {
-    products: parsed.data.result?.structuredContent.products ?? [],
+    products: content.products,
     sourceEndpoint: input.endpoint,
+    sourceMerchantCountryCode: input.countryCode.toUpperCase(),
+    query: input.query,
   };
 }

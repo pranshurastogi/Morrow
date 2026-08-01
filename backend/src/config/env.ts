@@ -60,6 +60,7 @@ const environmentSchema = z.object({
     .max(60_000)
     .default(12_000),
   UCP_MAX_PRODUCTS: z.coerce.number().int().min(1).max(20).default(8),
+  UCP_MAX_MERCHANTS_PER_SCAN: z.coerce.number().int().min(1).max(10).default(6),
 
   PRAVA_API_URL: z.url().default("https://sandbox.api.prava.space"),
   PRAVA_SECRET_KEY: z.string().min(1).optional(),

@@ -27,6 +27,12 @@ R2 image
 
 The first observation uses the lower-latency vision model. A narrow deterministic policy escalates genuinely borderline evidence to the stronger model. Neither model receives tools or purchase authority. Prompt-injection text found by OCR remains inside explicitly untrusted data delimiters.
 
+## Live offer discovery
+
+Morrow searches Shopify Global Catalog and a bounded set of brand/category storefront catalogues in parallel. The India registry contains every supplied physical-goods UCP endpoint; `bun run ucp:probe --all` checks the complete registry without placing an order. A scan queries only the relevant subset to control latency and upstream load, then retries an evidence-preserving relaxed query only when a source returns no products.
+
+Live search responses are not cached. Each result is normalized into an auditable canonical product and merchant listing, then deterministic policy rechecks identifiers, brand, size, currency, inventory, budget, and official-store provenance. Travel MCPs and platform-specific connectors are intentionally outside this physical-product pipeline. A source failure is isolated, and the UI can refresh live catalogues without repeating recognition.
+
 ## Prava lifecycle
 
 1. The user selects a non-illustrative, exact-variant offer.

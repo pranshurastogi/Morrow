@@ -7,9 +7,14 @@ import { normalizedSizeSchema } from "../../domain/product-observation";
 import {
   rankOffers,
   type OfferRequirements,
+  verifyCatalogEquivalence,
   verifyMerchantVariant,
 } from "./offer-policy";
 import { createUcpCartQuote } from "../../integrations/shopify-ucp/cart";
+import {
+  brandIndianMerchants,
+  merchantByDomain,
+} from "../../integrations/shopify-ucp/merchant-registry";
 
 function stableOfferId(scanId: string, listingId: string): string {
   const bytes = Buffer.from(
@@ -65,25 +70,100 @@ function mapProduct(row: Record<string, unknown>): CanonicalProductCandidate {
   };
 }
 
+function mapListingProduct(
+  row: Record<string, unknown>,
+): CanonicalProductCandidate {
+  return mapProduct({
+    id: row.listing_product_id,
+    category: row.listing_category,
+    brand: row.listing_brand,
+    name: row.listing_name,
+    variant: row.listing_variant,
+    size_value: row.listing_size_value,
+    size_unit: row.listing_size_unit,
+    gtin: row.listing_gtin,
+    upc: row.listing_upc,
+    ean: row.listing_ean,
+    mpn: row.listing_mpn,
+    model_number: row.listing_model_number,
+    attributes: row.listing_product_attributes,
+    source_provider: row.listing_source_provider,
+    source_product_id: row.listing_source_product_id,
+    source_variant_id: row.listing_source_variant_id,
+    source_merchant_domain: row.listing_source_merchant_domain,
+  });
+}
+
+export function isPurchasableOffer(
+  offer: Awaited<ReturnType<typeof searchVerifiedListings>>[number],
+): boolean {
+  return (
+    !offer.illustrative &&
+    offer.identityVerification.status === "verified" &&
+    offer.rejectedReasons.length === 0
+  );
+}
+
 export async function searchVerifiedListings(
   input: { scanId: string; productId: string; requirements: OfferRequirements },
   sql: Sql = getDatabase(),
 ) {
-  const [productRow] =
-    await sql`select * from canonical_products where id = ${input.productId}`;
+  const [productRow] = await sql`
+    select cp.*, s.country_code as scan_country_code
+    from canonical_products cp
+    join scans s on s.id = ${input.scanId}
+    where cp.id = ${input.productId}
+  `;
   if (!productRow) return [];
   const product = mapProduct(productRow);
+  const brandStores = brandIndianMerchants(product.brand);
+  const brandStoreDomains = brandStores.map((merchant) => merchant.domain);
+  const brandStoreCondition = brandStoreDomains.length
+    ? sql`m.domain in ${sql(brandStoreDomains)}`
+    : sql`false`;
   const rows = await sql`
     select ml.*, m.slug as merchant_slug, m.name as merchant_name, m.domain,
-      m.country_code, m.provider, m.trust_score, m.authorized_seller
-    from merchant_listings ml join merchants m on m.id = ml.merchant_id
-    where ml.canonical_product_id = ${input.productId} and m.active = true
-      and m.country_code is not null
+      m.country_code, m.provider, m.trust_score, m.authorized_seller,
+      cp.id as listing_product_id, cp.category as listing_category,
+      cp.brand as listing_brand, cp.name as listing_name,
+      cp.variant as listing_variant, cp.size_value as listing_size_value,
+      cp.size_unit as listing_size_unit, cp.gtin as listing_gtin,
+      cp.upc as listing_upc, cp.ean as listing_ean, cp.mpn as listing_mpn,
+      cp.model_number as listing_model_number,
+      cp.attributes as listing_product_attributes,
+      cp.source_provider as listing_source_provider,
+      cp.source_product_id as listing_source_product_id,
+      cp.source_variant_id as listing_source_variant_id,
+      cp.source_merchant_domain as listing_source_merchant_domain,
+      sc.classification as scan_classification,
+      sc.identity_score as scan_identity_score
+    from merchant_listings ml
+    join merchants m on m.id = ml.merchant_id
+    join canonical_products cp on cp.id = ml.canonical_product_id
+    left join scan_candidates sc on sc.scan_id = ${input.scanId}
+      and sc.product_id = ml.canonical_product_id
+      and sc.classification in ('exact_verified', 'likely_exact', 'similar')
+    where (
+        ml.canonical_product_id = ${input.productId}
+        or sc.product_id is not null
+        or ${brandStoreCondition}
+      )
+      and m.active = true
       and ml.price_minor is not null and ml.currency is not null
       and ml.product_url is not null and ml.last_seen_at > now() - interval '1 day'
+    order by
+      case when ml.canonical_product_id = ${input.productId} then 0 else 1 end,
+      sc.identity_score desc nulls last,
+      ml.last_seen_at desc
+    limit 200
   `;
   const offers: NormalizedOffer[] = await Promise.all(
     rows.map(async (row) => {
+      const listingProduct = mapListingProduct(row);
+      const registryMerchant = merchantByDomain(String(row.domain));
+      const officialBrandStore = brandStores.some(
+        (merchant) => merchant.endpoint === registryMerchant?.endpoint,
+      );
       let offer: NormalizedOffer = {
         id: stableOfferId(input.scanId, String(row.id)),
         provider:
@@ -96,7 +176,9 @@ export async function searchVerifiedListings(
           id: String(row.merchant_id),
           name: String(row.merchant_name),
           url: `https://${String(row.domain)}`,
-          countryCode: String(row.country_code ?? "IN").trim(),
+          countryCode: String(
+            row.country_code ?? productRow.scan_country_code ?? "IN",
+          ).trim(),
           trustScore: row.trust_score === null ? null : Number(row.trust_score),
           authorizedSeller:
             row.authorized_seller === null
@@ -138,8 +220,53 @@ export async function searchVerifiedListings(
         },
         illustrative: false,
       };
+      const sourceVerification = verifyMerchantVariant(listingProduct, offer);
+      const equivalence = verifyCatalogEquivalence({
+        selected: product,
+        listingProduct,
+        officialBrandStore,
+      });
+      const identityVerification =
+        sourceVerification.status === "verified" &&
+        equivalence.status === "verified"
+          ? {
+              status: "verified" as const,
+              score: Math.min(sourceVerification.score, equivalence.score),
+              contradictions: [],
+            }
+          : sourceVerification.status === "rejected" ||
+              equivalence.status === "rejected"
+            ? {
+                status: "rejected" as const,
+                score: 0,
+                contradictions: [
+                  ...sourceVerification.contradictions,
+                  ...equivalence.contradictions,
+                ],
+              }
+            : {
+                status: "likely" as const,
+                score: Math.min(sourceVerification.score, equivalence.score),
+                contradictions: [
+                  ...sourceVerification.contradictions,
+                  ...equivalence.contradictions,
+                ],
+              };
+      offer = {
+        ...offer,
+        product: {
+          ...offer.product,
+          attributes: {
+            ...offer.product.attributes,
+            identity_basis: equivalence.basis,
+            verified_product_id: product.id,
+          },
+        },
+        identityVerification,
+      };
       const listingAttributes = offer.product.attributes;
       if (
+        identityVerification.status === "verified" &&
         offer.provider === "shopify_ucp" &&
         listingAttributes.ucp_endpoint &&
         offer.product.externalVariantId
@@ -179,10 +306,7 @@ export async function searchVerifiedListings(
           // Catalogue price remains a clearly labelled estimate when Cart MCP is unavailable.
         }
       }
-      return {
-        ...offer,
-        identityVerification: verifyMerchantVariant(product, offer),
-      };
+      return offer;
     }),
   );
   const ranked = rankOffers(offers, input.requirements);
