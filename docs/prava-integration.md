@@ -16,6 +16,10 @@ The browser receives `session_token` and `iframe_url` only for mounting Prava's 
 
 When the Browser Harness executor is unavailable, Morrow exposes a clearly labelled sandbox-only approval check. It creates an embedded session with the verified offer's real product, merchant, currency, and estimated total. After the card/passkey step, the backend confirms that Prava issued the scoped credential, keeps that credential in memory only, and reports `DECLINED` because no merchant checkout was attempted. The UI records the Prava reference and says **no merchant order was placed**. This prevents a pending session or successful card enrollment from being presented as a purchase.
 
+Prava sandbox still performs a real browser WebAuthn/passkey ceremony. Morrow checks for HTTPS and WebAuthn support before the ceremony, but these capability checks cannot guarantee that a user will finish the operating-system prompt. A cancelled, timed-out, or failed ceremony keeps the verified product and offer on screen and requires a newly created 15-minute Prava session; Morrow never tries to resume or repurpose the failed session.
+
+The recovery view records only a bounded error code and message, timestamp, timezone, frontend origin, browser capability booleans, Morrow sandbox-check ID, and provider order reference. SDK error details are not persisted. Keys, JWTs, and card-like numbers are redacted in both browser and server code. If Prava includes an `X-Response-ID` in the SDK error payload, Morrow includes it in the copyable support bundle. The host page cannot read a response header that remains inside Prava's cross-origin iframe, so it directs the tester to the failed Prava request in browser developer tools when that ID is not propagated.
+
 Delivery addresses are not part of Prava's public application card APIs. Morrow stores them as encrypted, owner-scoped records and releases one only to the restricted checkout worker after purchase approval. Passkeys remain entirely on Prava's secure WebAuthn surface; Morrow does not provide a fake passkey-management API.
 
 ## Wallet authorization

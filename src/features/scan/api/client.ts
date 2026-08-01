@@ -9,6 +9,7 @@ import type {
   CheckoutCapability,
   EmbeddedPaymentSession,
   Offer,
+  PravaClientIssue,
   PublicPaymentResult,
   SandboxApprovalResult,
   SandboxApprovalSession,
@@ -273,6 +274,19 @@ export function getSandboxApprovalStatus(
   sandboxCheckId: string,
 ): Promise<SandboxApprovalResult> {
   return apiRequest(`/sandbox-approval-checks/${sandboxCheckId}`);
+}
+
+export function recordSandboxApprovalClientIssue(
+  sandboxCheckId: string,
+  issue: PravaClientIssue,
+): Promise<{ recorded: true }> {
+  return apiRequest(
+    `/sandbox-approval-checks/${sandboxCheckId}/client-events`,
+    {
+      method: "POST",
+      body: JSON.stringify(issue),
+    },
+  );
 }
 
 export { ApiError };

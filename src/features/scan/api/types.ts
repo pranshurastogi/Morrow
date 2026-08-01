@@ -147,6 +147,23 @@ export interface PravaCollectionSession {
   expiresAt: string;
 }
 
+export interface PravaBrowserCapabilities {
+  secureContext: boolean;
+  webAuthnAvailable: boolean;
+  platformAuthenticatorAvailable: boolean | null;
+}
+
+export interface PravaClientIssue {
+  event: "SDK_ERROR" | "SDK_DISMISSED" | "SESSION_REFRESH_FAILED";
+  code: string;
+  message: string;
+  responseId: string | null;
+  occurredAt: string;
+  timezone: string;
+  origin: string;
+  capabilities: PravaBrowserCapabilities;
+}
+
 export interface EmbeddedPaymentSession extends PravaCollectionSession {
   paymentSessionId: string;
   providerSessionId: string;

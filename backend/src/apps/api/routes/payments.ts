@@ -16,6 +16,7 @@ import {
 import {
   createSandboxApprovalCheck,
   getSandboxApprovalStatus,
+  recordSandboxApprovalClientEvent,
 } from "../../../modules/payments/sandbox-approval-service";
 
 const intentParamsSchema = z.object({ id: z.uuid() });
@@ -34,6 +35,24 @@ const sandboxApprovalBodySchema = z.object({
   scanId: z.uuid(),
   productId: z.uuid(),
   offerId: z.uuid(),
+});
+const sandboxClientEventSchema = z.object({
+  event: z.enum(["SDK_ERROR", "SDK_DISMISSED", "SESSION_REFRESH_FAILED"]),
+  code: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[A-Za-z0-9_.:-]+$/),
+  message: z.string().min(1).max(400),
+  responseId: z.string().min(1).max(255).nullable(),
+  occurredAt: z.iso.datetime(),
+  timezone: z.string().min(1).max(100),
+  origin: z.url().max(500),
+  capabilities: z.object({
+    secureContext: z.boolean(),
+    webAuthnAvailable: z.boolean(),
+    platformAuthenticatorAvailable: z.boolean().nullable(),
+  }),
 });
 
 export const paymentRoutes: FastifyPluginAsync = async (app) => {
@@ -147,6 +166,22 @@ export const paymentRoutes: FastifyPluginAsync = async (app) => {
       const params = sandboxApprovalParamsSchema.parse(request.params);
       reply.header("Cache-Control", "no-store");
       return getSandboxApprovalStatus(params.id, request.principal.userId);
+    },
+  );
+
+  app.post(
+    "/sandbox-approval-checks/:id/client-events",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const params = sandboxApprovalParamsSchema.parse(request.params);
+      const event = sandboxClientEventSchema.parse(request.body);
+      await recordSandboxApprovalClientEvent(
+        params.id,
+        request.principal.userId,
+        event,
+      );
+      reply.header("Cache-Control", "no-store");
+      return reply.code(202).send({ recorded: true as const });
     },
   );
 };

@@ -4,37 +4,66 @@ import {
   type CardValidationState,
   type PravaError,
 } from "@prava-sdk/core";
+import { Check, Fingerprint, ShieldCheck } from "lucide-react";
 import { publicEnvironment } from "@/config/public-env";
-import type { PravaCollectionSession } from "../api/types";
+import type { PravaClientIssue, PravaCollectionSession } from "../api/types";
+import { createPravaClientIssue } from "../lib/prava-security";
+
+type SecureFormPhase = "opening" | "ready" | "details_ready" | "approved";
+
+const phaseCopy: Record<SecureFormPhase, { title: string; detail: string }> = {
+  opening: {
+    title: "Opening secure surface",
+    detail: "Establishing an isolated Prava session.",
+  },
+  ready: {
+    title: "Secure form ready",
+    detail: "Card details remain inside Prava.",
+  },
+  details_ready: {
+    title: "Device approval next",
+    detail: "Continue inside Prava, then approve the device prompt.",
+  },
+  approved: {
+    title: "Approval received",
+    detail: "Morrow is checking the server-side result.",
+  },
+};
+
+function PhaseIcon({ phase }: { phase: SecureFormPhase }) {
+  if (phase === "approved") return <Check aria-hidden />;
+  if (phase === "details_ready") return <Fingerprint aria-hidden />;
+  return <ShieldCheck aria-hidden />;
+}
 
 export function PravaCardForm({
   session,
   onSuccess,
   onError,
+  onIssue,
 }: {
   session: PravaCollectionSession;
   onSuccess: () => void;
-  onError: (error: Error) => void;
+  onError?: (error: Error) => void;
+  onIssue?: (issue: PravaClientIssue) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const sdk = useRef<PravaSDK | null>(null);
   const mounted = useRef(false);
-  const observer = useRef<MutationObserver | null>(null);
+  const issueHandled = useRef(false);
   const readyTimeout = useRef<number | null>(null);
   const onSuccessRef = useRef(onSuccess);
   const onErrorRef = useRef(onError);
-  const [ready, setReady] = useState(false);
-  const [complete, setComplete] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const onIssueRef = useRef(onIssue);
+  const [phase, setPhase] = useState<SecureFormPhase>("opening");
 
   useEffect(() => {
     onSuccessRef.current = onSuccess;
     onErrorRef.current = onError;
-  }, [onError, onSuccess]);
+    onIssueRef.current = onIssue;
+  }, [onError, onIssue, onSuccess]);
 
   const clearWatchers = useCallback(() => {
-    observer.current?.disconnect();
-    observer.current = null;
     if (readyTimeout.current !== null) {
       window.clearTimeout(readyTimeout.current);
       readyTimeout.current = null;
@@ -43,81 +72,101 @@ export function PravaCardForm({
 
   const markReady = useCallback(() => {
     clearWatchers();
-    setReady(true);
+    setPhase((current) =>
+      current === "details_ready" || current === "approved" ? current : "ready",
+    );
   }, [clearWatchers]);
 
+  const reportIssue = useCallback(
+    async (
+      event: PravaClientIssue["event"],
+      error: unknown,
+      message?: string,
+    ) => {
+      if (issueHandled.current) return;
+      issueHandled.current = true;
+      clearWatchers();
+      const issue = await createPravaClientIssue({
+        event,
+        error,
+        ...(message ? { message } : {}),
+      });
+      onIssueRef.current?.(issue);
+      onErrorRef.current?.(
+        Object.assign(new Error(issue.message), {
+          code: issue.code,
+        }),
+      );
+    },
+    [clearWatchers],
+  );
+
   const mount = useCallback(async () => {
-    if (!publicEnvironment.pravaPublishableKey) {
-      onErrorRef.current(
-        new Error("VITE_PRAVA_PUBLISHABLE_KEY is not configured."),
+    issueHandled.current = false;
+    if (!publicEnvironment.pravaPublishableKey.startsWith("pk_")) {
+      await reportIssue(
+        "SDK_ERROR",
+        Object.assign(
+          new Error("The Prava publishable key is not configured."),
+          { code: "INVALID_CONFIG" },
+        ),
       );
       return;
     }
     if (!container.current) return;
     clearWatchers();
-    setReady(false);
-    setComplete(false);
-    setMessage(null);
+    setPhase("opening");
     sdk.current?.destroy();
-    sdk.current = new PravaSDK({
-      publishableKey: publicEnvironment.pravaPublishableKey,
-    });
-    observer.current = new MutationObserver(() => {
-      if (container.current?.querySelector("iframe")) {
-        markReady();
-      }
-    });
-    observer.current.observe(container.current, {
-      childList: true,
-      subtree: true,
-    });
-    readyTimeout.current = window.setTimeout(() => {
-      if (container.current?.querySelector("iframe")) {
-        markReady();
-        return;
-      }
-      const error = new Error(
-        "Prava's secure form took too long to open. Please try again.",
-      );
-      setMessage(error.message);
-      onErrorRef.current(error);
-    }, 12_000);
     try {
+      sdk.current = new PravaSDK({
+        publishableKey: publicEnvironment.pravaPublishableKey,
+      });
+      readyTimeout.current = window.setTimeout(() => {
+        void reportIssue(
+          "SDK_ERROR",
+          Object.assign(
+            new Error("Prava's secure form took too long to open."),
+            { code: "IFRAME_LOAD_TIMEOUT" },
+          ),
+        );
+      }, 30_000);
       await sdk.current.collectPAN({
         sessionToken: session.sessionToken,
         iframeUrl: session.iframeUrl,
         container: container.current,
         onReady: markReady,
         onChange: (state: CardValidationState) => {
-          setComplete(state.isComplete);
+          setPhase(state.isComplete ? "details_ready" : "ready");
         },
-        onSuccess: () => onSuccessRef.current(),
-        onError: (error: PravaError) => {
+        onSuccess: () => {
           clearWatchers();
-          setMessage(error.message);
-          onErrorRef.current(new Error(error.message));
+          setPhase("approved");
+          onSuccessRef.current();
+        },
+        onError: (error: PravaError) => {
+          void reportIssue("SDK_ERROR", error);
         },
         onDismiss: ({ reason }) => {
-          clearWatchers();
-          const error = new Error(
-            reason
-              ? `Prava approval was dismissed: ${reason}`
-              : "Prava approval was dismissed.",
+          const message = reason
+            ? `Prava approval was dismissed: ${reason}`
+            : "Prava approval was dismissed.";
+          void reportIssue(
+            "SDK_DISMISSED",
+            { code: "SDK_DISMISSED", message },
+            message,
           );
-          setMessage(error.message);
-          onErrorRef.current(error);
         },
       });
     } catch (error) {
-      clearWatchers();
-      const caught =
-        error instanceof Error
-          ? error
-          : new Error("Prava could not open the approval form.");
-      setMessage(caught.message);
-      onErrorRef.current(caught);
+      await reportIssue("SDK_ERROR", error);
     }
-  }, [clearWatchers, markReady, session.iframeUrl, session.sessionToken]);
+  }, [
+    clearWatchers,
+    markReady,
+    reportIssue,
+    session.iframeUrl,
+    session.sessionToken,
+  ]);
 
   useEffect(() => {
     if (!mounted.current) {
@@ -132,46 +181,37 @@ export function PravaCardForm({
     };
   }, [clearWatchers, mount]);
 
+  const copy = phaseCopy[phase];
+  const active = phase === "opening" || phase === "details_ready";
+
   return (
-    <div>
-      {!ready && !message && (
-        <p
-          className="py-8 text-center font-mono text-xs text-muted-foreground"
-          role="status"
-        >
-          Opening Prava's secure approval surface…
-        </p>
-      )}
-      {message && (
-        <div
-          className="mb-3 border border-postal/50 bg-postal/5 p-3 text-sm text-postal"
-          role="alert"
-        >
-          {message}
-          <button
-            type="button"
-            className="ml-2 underline"
-            onClick={() => void mount()}
-          >
-            Try again
-          </button>
-        </div>
-      )}
+    <div className="prava-form-shell" data-phase={phase}>
+      <div
+        className="prava-secure-status"
+        data-active={active ? "true" : "false"}
+        role="status"
+        aria-live="polite"
+      >
+        <span className="prava-status-dial" aria-hidden>
+          <PhaseIcon phase={phase} />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-medium">{copy.title}</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            {copy.detail}
+          </span>
+        </span>
+      </div>
+      <div
+        className="prava-progress-rule"
+        data-active={active ? "true" : "false"}
+        aria-hidden
+      />
       <div
         ref={container}
         className="min-h-[400px] overflow-hidden"
         aria-label="Prava secure card approval"
       />
-      {ready && (
-        <p
-          className="border-t border-border px-2 pt-3 font-mono text-[10px] text-muted-foreground"
-          role="status"
-        >
-          {complete
-            ? "Card details valid · finish inside Prava"
-            : "Secure form ready · details remain with Prava"}
-        </p>
-      )}
     </div>
   );
 }

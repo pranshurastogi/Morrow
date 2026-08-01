@@ -86,6 +86,8 @@ function AuthenticatedScanDesk() {
     paymentResult,
     sandboxSession,
     sandboxResult,
+    sandboxIssue,
+    sandboxRestarting,
     checkoutCapability,
     error,
   } = state;
@@ -154,8 +156,11 @@ function AuthenticatedScanDesk() {
           <SandboxCheckoutPanel
             session={sandboxSession}
             offer={selectedOffer}
+            issue={sandboxIssue}
+            restarting={sandboxRestarting}
             onSuccess={() => void actions.pollSandboxApproval()}
-            onError={actions.stopWithError}
+            onIssue={actions.recordSandboxIssue}
+            onRestart={() => void actions.startSandboxApproval()}
           />
         )}
         {stage === "sandbox_closing" && selectedOffer && (

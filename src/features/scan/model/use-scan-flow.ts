@@ -12,6 +12,7 @@ import {
   getPaymentStatus,
   getSandboxApprovalStatus,
   getScan,
+  recordSandboxApprovalClientIssue,
   retryScan,
   watchScan,
 } from "../api/client";
@@ -20,11 +21,13 @@ import type {
   CheckoutCapability,
   EmbeddedPaymentSession,
   Offer,
+  PravaClientIssue,
   PublicPaymentResult,
   SandboxApprovalResult,
   SandboxApprovalSession,
   ScanRecord,
 } from "../api/types";
+import { createPravaClientIssue } from "../lib/prava-security";
 
 export type ScanStage =
   | "idle"
@@ -55,6 +58,8 @@ interface State {
   paymentResult: PublicPaymentResult | null;
   sandboxSession: SandboxApprovalSession | null;
   sandboxResult: SandboxApprovalResult | null;
+  sandboxIssue: PravaClientIssue | null;
+  sandboxRestarting: boolean;
   error: { code: string; message: string } | null;
 }
 
@@ -75,6 +80,8 @@ type Action =
   | { type: "payment"; session: EmbeddedPaymentSession }
   | { type: "payment-result"; result: PublicPaymentResult; stage: ScanStage }
   | { type: "sandbox-payment"; session: SandboxApprovalSession }
+  | { type: "sandbox-issue"; issue: PravaClientIssue }
+  | { type: "sandbox-restarting"; restarting: boolean }
   | {
       type: "sandbox-result";
       result: SandboxApprovalResult;
@@ -96,6 +103,8 @@ const initialState: State = {
   paymentResult: null,
   sandboxSession: null,
   sandboxResult: null,
+  sandboxIssue: null,
+  sandboxRestarting: false,
   error: null,
 };
 
@@ -173,7 +182,17 @@ function reducer(state: State, action: Action): State {
         stage: "sandbox_payment",
         sandboxSession: action.session,
         sandboxResult: null,
+        sandboxIssue: null,
+        sandboxRestarting: false,
       };
+    case "sandbox-issue":
+      return {
+        ...state,
+        sandboxIssue: action.issue,
+        sandboxRestarting: false,
+      };
+    case "sandbox-restarting":
+      return { ...state, sandboxRestarting: action.restarting };
     case "sandbox-result":
       return { ...state, stage: action.stage, sandboxResult: action.result };
     case "error":
@@ -198,6 +217,7 @@ export function useScanFlow() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const streamAbort = useRef<AbortController | null>(null);
   const paymentAbort = useRef<AbortController | null>(null);
+  const sandboxSessionPending = useRef(false);
 
   const hydrateResult = useCallback(async (scan: ScanRecord) => {
     if (!scan.selectedProductId)
@@ -338,7 +358,14 @@ export function useScanFlow() {
   }, [state.scan, state.selectedOffer]);
 
   const startSandboxApproval = useCallback(async () => {
-    if (!state.scan?.selectedProductId || !state.selectedOffer) return;
+    if (
+      sandboxSessionPending.current ||
+      !state.scan?.selectedProductId ||
+      !state.selectedOffer
+    )
+      return;
+    sandboxSessionPending.current = true;
+    dispatch({ type: "sandbox-restarting", restarting: true });
     try {
       const session = await createSandboxApprovalCheck({
         scanId: state.scan.id,
@@ -347,9 +374,38 @@ export function useScanFlow() {
       });
       dispatch({ type: "sandbox-payment", session });
     } catch (error) {
-      dispatch({ type: "error", error });
+      if (state.sandboxSession) {
+        const issue = await createPravaClientIssue({
+          event: "SESSION_REFRESH_FAILED",
+          error,
+          message:
+            error instanceof Error
+              ? error.message
+              : "A fresh Prava sandbox session could not be created.",
+        });
+        dispatch({ type: "sandbox-issue", issue });
+      } else {
+        dispatch({ type: "error", error });
+      }
+    } finally {
+      sandboxSessionPending.current = false;
+      dispatch({ type: "sandbox-restarting", restarting: false });
     }
-  }, [state.scan, state.selectedOffer]);
+  }, [state.sandboxSession, state.scan, state.selectedOffer]);
+
+  const recordSandboxIssue = useCallback(
+    (issue: PravaClientIssue) => {
+      dispatch({ type: "sandbox-issue", issue });
+      if (!state.sandboxSession) return;
+      void recordSandboxApprovalClientIssue(
+        state.sandboxSession.sandboxCheckId,
+        issue,
+      ).catch(() => {
+        // Approval recovery must remain available if audit delivery is offline.
+      });
+    },
+    [state.sandboxSession],
+  );
 
   const confirmCandidate = useCallback(
     async (productId: string) => {
@@ -484,6 +540,7 @@ export function useScanFlow() {
       selectOffer: (offer: Offer) => dispatch({ type: "select-offer", offer }),
       requestAuthority,
       startSandboxApproval,
+      recordSandboxIssue,
       approveWithPrava,
       pollPayment,
       pollSandboxApproval,

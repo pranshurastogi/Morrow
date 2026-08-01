@@ -51,6 +51,21 @@ export interface SandboxApprovalStatus {
   message: string;
 }
 
+export interface SandboxApprovalClientEvent {
+  event: "SDK_ERROR" | "SDK_DISMISSED" | "SESSION_REFRESH_FAILED";
+  code: string;
+  message: string;
+  responseId: string | null;
+  occurredAt: string;
+  timezone: string;
+  origin: string;
+  capabilities: {
+    secureContext: boolean;
+    webAuthnAvailable: boolean;
+    platformAuthenticatorAvailable: boolean | null;
+  };
+}
+
 function key(id: string): string {
   return `${SANDBOX_CHECK_PREFIX}${id}`;
 }
@@ -60,6 +75,17 @@ function ttlSeconds(expiresAt: string): number {
     (new Date(expiresAt).getTime() - Date.now()) / 1_000,
   );
   return Math.max(60, remaining + SANDBOX_CHECK_GRACE_SECONDS);
+}
+
+function sanitizeClientEventMessage(value: string): string {
+  return value
+    .replace(/\b(?:sk|pk)_(?:test|live)_[A-Za-z0-9_-]+\b/g, "[redacted key]")
+    .replace(
+      /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
+      "[redacted token]",
+    )
+    .replace(/\b(?:\d[ -]*?){13,19}\b/g, "[redacted number]")
+    .slice(0, 400);
 }
 
 function assertSandboxConfigured(): void {
@@ -263,6 +289,38 @@ export async function createSandboxApprovalCheck(input: {
     iframeUrl: providerSession.iframe_url,
     expiresAt: providerSession.expires_at,
   };
+}
+
+export async function recordSandboxApprovalClientEvent(
+  id: string,
+  userId: string,
+  event: SandboxApprovalClientEvent,
+): Promise<void> {
+  const record = await load(id, userId);
+  await writeAuditEvent({
+    userId,
+    entityType: "sandbox_approval_check",
+    entityId: record.id,
+    eventType:
+      event.event === "SDK_DISMISSED"
+        ? "PRAVA_SANDBOX_APPROVAL_DISMISSED"
+        : event.event === "SESSION_REFRESH_FAILED"
+          ? "PRAVA_SANDBOX_SESSION_REFRESH_FAILED"
+          : "PRAVA_SANDBOX_CLIENT_ERROR",
+    actorType: "user",
+    actorId: userId,
+    payload: {
+      code: event.code,
+      message: sanitizeClientEventMessage(event.message),
+      responseId: event.responseId,
+      occurredAt: event.occurredAt,
+      timezone: event.timezone,
+      origin: event.origin,
+      capabilities: event.capabilities,
+      providerOrderId: record.providerOrderId,
+      providerStatus: record.providerStatus,
+    },
+  });
 }
 
 export async function getSandboxApprovalStatus(
