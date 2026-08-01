@@ -28,6 +28,7 @@ import {
   sandboxSupportDetails,
 } from "../lib/prava-security";
 import { PravaCardForm } from "./prava-card-form";
+import { TransactionMilestone } from "./transaction-milestone";
 
 function formatMoney(amountMinor: number, currency: string): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(
@@ -399,53 +400,6 @@ export function SandboxCheckoutPanel({
   );
 }
 
-function Milestone({
-  complete,
-  active,
-  icon: Icon,
-  title,
-  detail,
-}: {
-  complete: boolean;
-  active: boolean;
-  icon: typeof CreditCard;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <li
-      className={`sandbox-milestone relative grid grid-cols-[2rem_minmax(0,1fr)] gap-3 pb-5 last:pb-0 ${
-        active ? "sandbox-milestone-active" : ""
-      }`}
-      aria-current={active ? "step" : undefined}
-    >
-      <span
-        className={`relative z-10 grid h-8 w-8 place-items-center rounded-full border ${
-          complete
-            ? "border-primary bg-primary text-primary-foreground"
-            : active
-              ? "border-brass bg-secondary text-foreground"
-              : "border-border bg-parchment text-muted-foreground"
-        }`}
-      >
-        {complete ? (
-          <Check className="h-4 w-4" aria-hidden />
-        ) : active ? (
-          <Icon className="h-4 w-4" aria-hidden />
-        ) : (
-          <Circle className="h-3 w-3" aria-hidden />
-        )}
-      </span>
-      <div className="pt-0.5">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          {detail}
-        </p>
-      </div>
-    </li>
-  );
-}
-
 export function SandboxStatusPanel({
   offer,
   result,
@@ -472,21 +426,21 @@ export function SandboxStatusPanel({
       <div className="sandbox-verification-rule mt-5" aria-hidden />
       <Plate className="mt-3 p-4">
         <ol className="relative before:absolute before:bottom-4 before:left-4 before:top-4 before:w-px before:bg-border">
-          <Milestone
+          <TransactionMilestone
             complete
             active={false}
             icon={CreditCard}
             title="Session created"
             detail={`${offer.merchant.name} · ${formatMoney(offer.price.estimatedTotalMinor, offer.price.currency)}`}
           />
-          <Milestone
+          <TransactionMilestone
             complete={milestones?.cardAndPasskeyApproved ?? false}
             active={!milestones?.cardAndPasskeyApproved}
             icon={Fingerprint}
             title="Card and passkey approved"
             detail="Approval happens only on Prava’s isolated surface."
           />
-          <Milestone
+          <TransactionMilestone
             complete={milestones?.credentialIssued ?? false}
             active={Boolean(
               milestones?.cardAndPasskeyApproved &&
@@ -496,7 +450,7 @@ export function SandboxStatusPanel({
             title="Scoped credential issued"
             detail="The one-time credential remains server-side."
           />
-          <Milestone
+          <TransactionMilestone
             complete={milestones?.providerClosed ?? false}
             active={Boolean(
               milestones?.credentialIssued && !milestones?.providerClosed,

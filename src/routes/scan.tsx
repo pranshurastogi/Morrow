@@ -8,7 +8,10 @@ import {
   ErrorPanel,
 } from "@/features/scan/components/completion-panel";
 import { EvidenceRequest } from "@/features/scan/components/evidence-request";
-import { PaymentPanel } from "@/features/scan/components/payment-panel";
+import {
+  PaymentPanel,
+  PaymentStatusPanel,
+} from "@/features/scan/components/payment-panel";
 import { ProgressPanel } from "@/features/scan/components/progress-panel";
 import {
   AmbiguousPanel,
@@ -109,9 +112,9 @@ function AuthenticatedScanDesk() {
         {stage === "idle" && (
           <CapturePanel onFile={(file) => void actions.startScan(file)} />
         )}
-        {(stage === "uploading" ||
-          stage === "inspecting" ||
-          stage === "checkout") && <ProgressPanel stage={stage} />}
+        {(stage === "uploading" || stage === "inspecting") && (
+          <ProgressPanel stage={stage} />
+        )}
         {stage === "more_evidence" && scan && (
           <EvidenceRequest
             scan={scan}
@@ -153,9 +156,12 @@ function AuthenticatedScanDesk() {
           <PaymentPanel
             session={paymentSession}
             offer={selectedOffer}
-            onSuccess={() => void actions.pollPayment()}
+            onSuccess={actions.acknowledgePaymentSurface}
             onError={actions.stopWithError}
           />
+        )}
+        {stage === "checkout" && selectedOffer && (
+          <PaymentStatusPanel offer={selectedOffer} result={paymentResult} />
         )}
         {stage === "sandbox_payment" && sandboxSession && selectedOffer && (
           <SandboxCheckoutPanel
@@ -163,7 +169,7 @@ function AuthenticatedScanDesk() {
             offer={selectedOffer}
             issue={sandboxIssue}
             restarting={sandboxRestarting}
-            onSuccess={() => void actions.pollSandboxApproval()}
+            onSuccess={actions.acknowledgeSandboxSurface}
             onIssue={actions.recordSandboxIssue}
             onRestart={() => void actions.startSandboxApproval()}
           />

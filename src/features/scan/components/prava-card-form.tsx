@@ -51,7 +51,9 @@ export function PravaCardForm({
   const sdk = useRef<PravaSDK | null>(null);
   const mounted = useRef(false);
   const issueHandled = useRef(false);
+  const successHandled = useRef(false);
   const readyTimeout = useRef<number | null>(null);
+  const frameObserver = useRef<MutationObserver | null>(null);
   const onSuccessRef = useRef(onSuccess);
   const onErrorRef = useRef(onError);
   const onIssueRef = useRef(onIssue);
@@ -68,6 +70,8 @@ export function PravaCardForm({
       window.clearTimeout(readyTimeout.current);
       readyTimeout.current = null;
     }
+    frameObserver.current?.disconnect();
+    frameObserver.current = null;
   }, []);
 
   const markReady = useCallback(() => {
@@ -83,7 +87,7 @@ export function PravaCardForm({
       error: unknown,
       message?: string,
     ) => {
-      if (issueHandled.current) return;
+      if (issueHandled.current || successHandled.current) return;
       issueHandled.current = true;
       clearWatchers();
       const issue = await createPravaClientIssue({
@@ -101,8 +105,17 @@ export function PravaCardForm({
     [clearWatchers],
   );
 
+  const reportSuccess = useCallback(() => {
+    if (successHandled.current) return;
+    successHandled.current = true;
+    clearWatchers();
+    setPhase("approved");
+    onSuccessRef.current();
+  }, [clearWatchers]);
+
   const mount = useCallback(async () => {
     issueHandled.current = false;
+    successHandled.current = false;
     if (!publicEnvironment.pravaPublishableKey.startsWith("pk_")) {
       await reportIssue(
         "SDK_ERROR",
@@ -130,6 +143,14 @@ export function PravaCardForm({
           ),
         );
       }, 30_000);
+      frameObserver.current = new MutationObserver(() => {
+        const frame = container.current?.querySelector("iframe");
+        if (frame) frame.addEventListener("load", markReady, { once: true });
+      });
+      frameObserver.current.observe(container.current, {
+        childList: true,
+        subtree: true,
+      });
       await sdk.current.collectPAN({
         sessionToken: session.sessionToken,
         iframeUrl: session.iframeUrl,
@@ -138,11 +159,7 @@ export function PravaCardForm({
         onChange: (state: CardValidationState) => {
           setPhase(state.isComplete ? "details_ready" : "ready");
         },
-        onSuccess: () => {
-          clearWatchers();
-          setPhase("approved");
-          onSuccessRef.current();
-        },
+        onSuccess: reportSuccess,
         onError: (error: PravaError) => {
           void reportIssue("SDK_ERROR", error);
         },
@@ -157,6 +174,7 @@ export function PravaCardForm({
           );
         },
       });
+      reportSuccess();
     } catch (error) {
       await reportIssue("SDK_ERROR", error);
     }
@@ -164,6 +182,7 @@ export function PravaCardForm({
     clearWatchers,
     markReady,
     reportIssue,
+    reportSuccess,
     session.iframeUrl,
     session.sessionToken,
   ]);
@@ -209,9 +228,27 @@ export function PravaCardForm({
       />
       <div
         ref={container}
-        className="min-h-[400px] overflow-hidden"
+        className={`min-h-[400px] overflow-hidden ${
+          phase === "approved" ? "hidden" : ""
+        }`}
         aria-label="Prava secure card approval"
       />
+      {phase === "approved" && (
+        <div
+          className="prava-approved-receipt"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="prava-approved-seal" aria-hidden>
+            <Check />
+          </span>
+          <p className="mt-4 font-medium">Device approval received.</p>
+          <p className="mt-1 max-w-xs text-center text-xs leading-relaxed text-muted-foreground">
+            The secure surface is closed. Morrow is reading the durable Prava
+            session status now.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

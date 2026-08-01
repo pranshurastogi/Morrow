@@ -25,7 +25,10 @@ import {
   reserveIdempotencyKey,
   updatePaymentSessionStatus,
 } from "./payment-repository";
-import { reconcilePublicPaymentState } from "./payment-status-policy";
+import {
+  reconcilePublicPaymentState,
+  shouldExpirePendingPayment,
+} from "./payment-status-policy";
 
 function embeddedSessionResponse(session: {
   id: string;
@@ -183,6 +186,22 @@ export async function syncPaymentStatus(
     await enqueueCheckout(session.id);
   } else if (result.status === "failed") {
     await updatePaymentSessionStatus(session.id, "FAILED", true);
+  } else if (
+    shouldExpirePendingPayment({
+      providerStatus: result.status,
+      localStatus: session.status,
+      expiresAt: session.expiresAt,
+    })
+  ) {
+    await updatePaymentSessionStatus(session.id, "EXPIRED", true);
+    await writeAuditEvent({
+      userId,
+      entityType: "payment_session",
+      entityId: session.id,
+      eventType: "PRAVA_SESSION_EXPIRED",
+      actorType: "api",
+      payload: { providerStatus: result.status },
+    });
   }
   const current = await getPaymentSessionForUser(paymentSessionId, userId);
   const providerResult = publicPaymentResult(result);

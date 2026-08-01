@@ -113,15 +113,26 @@ async function pravaFetch(path: string, init: RequestInit): Promise<unknown> {
       statusCode: 503,
     });
   }
-  const response = await fetch(`${env.PRAVA_API_URL}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${env.PRAVA_SECRET_KEY}`,
-      "Content-Type": "application/json",
-      ...init.headers,
-    },
-    signal: AbortSignal.timeout(env.PRAVA_REQUEST_TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${env.PRAVA_API_URL}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${env.PRAVA_SECRET_KEY}`,
+        "Content-Type": "application/json",
+        ...init.headers,
+      },
+      signal: AbortSignal.timeout(env.PRAVA_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new MorrowError({
+      code: "UPSTREAM_UNAVAILABLE",
+      message: "Prava could not be reached. The payment state was not changed.",
+      statusCode: 502,
+      retryable: true,
+      cause: error,
+    });
+  }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const error =

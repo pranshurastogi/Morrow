@@ -370,13 +370,6 @@ export async function getSandboxApprovalStatus(
         "Prava is preparing the sandbox authorization result.",
       );
     }
-    if (record.status === "closing") {
-      return publicStatus(
-        { ...record, providerStatus: "awaiting_result" },
-        "pending",
-        "Prava approval is verified. Closing this no-checkout sandbox exercise safely.",
-      );
-    }
     const lock = await getRedisConnection().set(
       `${SANDBOX_CLOSE_LOCK_PREFIX}${record.id}`,
       record.id,
@@ -391,17 +384,31 @@ export async function getSandboxApprovalStatus(
         "Prava approval is verified. Closing this no-checkout sandbox exercise safely.",
       );
     }
-    record = {
-      ...record,
-      status: "closing",
-      providerStatus: "awaiting_result",
-    };
-    await save(record);
-    await reportPravaStatus({
-      sessionId: record.providerSessionId,
-      transactionReferenceId: credential.transactionReferenceId,
-      approved: false,
-    });
+    if (
+      record.status !== "closing" ||
+      record.providerStatus !== "awaiting_result"
+    ) {
+      record = {
+        ...record,
+        status: "closing",
+        providerStatus: "awaiting_result",
+      };
+      await save(record);
+    }
+    try {
+      await reportPravaStatus({
+        sessionId: record.providerSessionId,
+        transactionReferenceId: credential.transactionReferenceId,
+        approved: false,
+      });
+    } catch (error) {
+      if (error instanceof MorrowError && !error.retryable) throw error;
+      return publicStatus(
+        record,
+        "pending",
+        "Prava approval is verified. Retrying the safe sandbox closure.",
+      );
+    }
     const finalResult = await getPravaPaymentResult(record.providerSessionId);
     if (finalResult.status === "failed" || finalResult.status === "completed") {
       record = await markVerified(record, finalResult.status);

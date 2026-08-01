@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
+  ApiError,
   addEvidenceImage,
   approvePurchaseIntent,
   createPaymentSession,
@@ -82,6 +83,11 @@ type Action =
   | { type: "select-offer"; offer: Offer }
   | { type: "payment"; session: EmbeddedPaymentSession }
   | { type: "payment-result"; result: PublicPaymentResult; stage: ScanStage }
+  | {
+      type: "payment-failed";
+      result: PublicPaymentResult;
+      error: { code: string; message: string };
+    }
   | { type: "sandbox-payment"; session: SandboxApprovalSession }
   | { type: "sandbox-issue"; issue: PravaClientIssue }
   | { type: "sandbox-restarting"; restarting: boolean }
@@ -192,6 +198,13 @@ function reducer(state: State, action: Action): State {
       return { ...state, stage: "payment", paymentSession: action.session };
     case "payment-result":
       return { ...state, stage: action.stage, paymentResult: action.result };
+    case "payment-failed":
+      return {
+        ...state,
+        stage: "error",
+        paymentResult: action.result,
+        error: action.error,
+      };
     case "sandbox-payment":
       return {
         ...state,
@@ -250,11 +263,81 @@ function stageForScan(scan: ScanRecord): ScanStage {
   return "inspecting";
 }
 
+function waitForPoll(signal: AbortSignal, delayMs: number): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      window.clearTimeout(timeout);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timeout = window.setTimeout(finish, delayMs);
+    signal.addEventListener("abort", finish, { once: true });
+  });
+}
+
+async function readPollStatus<T>(
+  request: () => Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      if (
+        signal.aborted ||
+        !(error instanceof ApiError) ||
+        !error.retryable ||
+        attempt === 3
+      ) {
+        throw error;
+      }
+      await waitForPoll(signal, 750 * 2 ** attempt);
+    }
+  }
+  throw new Error("Payment status could not be read.");
+}
+
+function sessionDeadline(expiresAt: string): number {
+  const providerDeadline = new Date(expiresAt).getTime();
+  return Number.isFinite(providerDeadline)
+    ? providerDeadline + 30_000
+    : Date.now() + 15 * 60_000;
+}
+
+function paymentFailure(result: PublicPaymentResult): {
+  code: string;
+  message: string;
+} {
+  if (result.checkoutIssue) return result.checkoutIssue;
+  if (result.checkoutStatus === "EXPIRED") {
+    return {
+      code: "PAYMENT_SESSION_EXPIRED",
+      message: "The Prava approval window expired before payment completed.",
+    };
+  }
+  if (result.checkoutStatus === "REVOKED") {
+    return {
+      code: "PAYMENT_SESSION_REVOKED",
+      message: "The bounded Prava payment was revoked before checkout.",
+    };
+  }
+  return {
+    code: "PAYMENT_DECLINED",
+    message: "Prava or the merchant declined this bounded payment.",
+  };
+}
+
 export function useScanFlow() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const streamAbort = useRef<AbortController | null>(null);
   const paymentAbort = useRef<AbortController | null>(null);
   const sandboxSessionPending = useRef(false);
+  const paymentPollSessionId = useRef<string | null>(null);
+  const sandboxPollSessionId = useRef<string | null>(null);
+  const paymentSurfaceApproved = useRef(false);
+  const paymentSurfaceFailed = useRef(false);
+  const sandboxSurfaceApproved = useRef(false);
 
   const hydrateResult = useCallback(async (scan: ScanRecord) => {
     if (!scan.selectedProductId)
@@ -449,6 +532,9 @@ export function useScanFlow() {
     )
       return;
     sandboxSessionPending.current = true;
+    paymentAbort.current?.abort();
+    sandboxPollSessionId.current = null;
+    sandboxSurfaceApproved.current = false;
     dispatch({ type: "sandbox-restarting", restarting: true });
     try {
       const session = await createSandboxApprovalCheck({
@@ -507,6 +593,10 @@ export function useScanFlow() {
 
   const approveWithPrava = useCallback(async () => {
     if (!state.purchaseIntentId) return;
+    paymentAbort.current?.abort();
+    paymentPollSessionId.current = null;
+    paymentSurfaceApproved.current = false;
+    paymentSurfaceFailed.current = false;
     try {
       await approvePurchaseIntent(state.purchaseIntentId);
       const session = await createPaymentSession(state.purchaseIntentId);
@@ -517,20 +607,23 @@ export function useScanFlow() {
   }, [state.purchaseIntentId]);
 
   const pollPayment = useCallback(async () => {
-    if (!state.paymentSession) return;
+    const session = state.paymentSession;
+    if (!session) return;
+    const sessionId = session.paymentSessionId;
+    if (paymentPollSessionId.current === sessionId) return;
     paymentAbort.current?.abort();
     const controller = new AbortController();
     paymentAbort.current = controller;
-    dispatch({ type: "stage", stage: "checkout" });
+    paymentPollSessionId.current = sessionId;
+    let approvalObserved = paymentSurfaceApproved.current;
+    let deadline = sessionDeadline(session.expiresAt);
     try {
-      for (
-        let attempt = 0;
-        attempt < 90 && !controller.signal.aborted;
-        attempt += 1
-      ) {
-        const result = await getPaymentStatus(
-          state.paymentSession.paymentSessionId,
+      while (!controller.signal.aborted && Date.now() <= deadline) {
+        const result = await readPollStatus(
+          () => getPaymentStatus(sessionId),
+          controller.signal,
         );
+        if (controller.signal.aborted) return;
         if (result.checkoutIssue) {
           throw Object.assign(new Error(result.checkoutIssue.message), {
             code: result.checkoutIssue.code,
@@ -541,36 +634,79 @@ export function useScanFlow() {
           return;
         }
         if (result.status === "failed") {
-          dispatch({ type: "payment-result", result, stage: "error" });
+          dispatch({
+            type: "payment-failed",
+            result,
+            error: paymentFailure(result),
+          });
           return;
         }
-        dispatch({ type: "payment-result", result, stage: "checkout" });
-        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        const serverObservedApproval =
+          result.providerStatus !== "pending" ||
+          result.checkoutStatus !== "PENDING";
+        const nextApprovalObserved =
+          approvalObserved ||
+          paymentSurfaceApproved.current ||
+          serverObservedApproval;
+        if (!approvalObserved && nextApprovalObserved) {
+          deadline = Math.max(deadline, Date.now() + 5 * 60_000);
+        }
+        approvalObserved = nextApprovalObserved;
+        dispatch({
+          type: "payment-result",
+          result,
+          stage: approvalObserved
+            ? "checkout"
+            : paymentSurfaceFailed.current
+              ? "error"
+              : "payment",
+        });
+        await waitForPoll(controller.signal, 2_000);
       }
-      if (!controller.signal.aborted)
-        throw new Error(
-          "Checkout confirmation is taking longer than expected.",
+      if (!controller.signal.aborted) {
+        throw Object.assign(
+          new Error(
+            approvalObserved
+              ? "Merchant confirmation is taking longer than expected. The payment state remains protected while Morrow checks it."
+              : "The Prava approval window expired before device approval completed.",
+          ),
+          {
+            code: approvalObserved
+              ? "CHECKOUT_RESULT_UNKNOWN"
+              : "PAYMENT_SESSION_EXPIRED",
+          },
         );
+      }
     } catch (error) {
       if (!controller.signal.aborted) dispatch({ type: "error", error });
+    } finally {
+      if (paymentAbort.current === controller) {
+        if (paymentPollSessionId.current === sessionId) {
+          paymentPollSessionId.current = null;
+        }
+        paymentAbort.current = null;
+      }
     }
   }, [state.paymentSession]);
 
   const pollSandboxApproval = useCallback(async () => {
-    if (!state.sandboxSession) return;
+    const session = state.sandboxSession;
+    if (!session) return;
+    const sessionId = session.sandboxCheckId;
+    if (sandboxPollSessionId.current === sessionId) return;
     paymentAbort.current?.abort();
     const controller = new AbortController();
     paymentAbort.current = controller;
-    dispatch({ type: "stage", stage: "sandbox_closing" });
+    sandboxPollSessionId.current = sessionId;
+    let approvalObserved = sandboxSurfaceApproved.current;
+    let deadline = sessionDeadline(session.expiresAt);
     try {
-      for (
-        let attempt = 0;
-        attempt < 60 && !controller.signal.aborted;
-        attempt += 1
-      ) {
-        const result = await getSandboxApprovalStatus(
-          state.sandboxSession.sandboxCheckId,
+      while (!controller.signal.aborted && Date.now() <= deadline) {
+        const result = await readPollStatus(
+          () => getSandboxApprovalStatus(sessionId),
+          controller.signal,
         );
+        if (controller.signal.aborted) return;
         if (result.status === "verified") {
           dispatch({
             type: "sandbox-result",
@@ -587,30 +723,91 @@ export function useScanFlow() {
                 : "PAYMENT_DECLINED",
           });
         }
+        const nextApprovalObserved =
+          approvalObserved ||
+          sandboxSurfaceApproved.current ||
+          result.providerStatus !== "pending" ||
+          result.milestones.cardAndPasskeyApproved;
+        if (!approvalObserved && nextApprovalObserved) {
+          deadline = Math.max(deadline, Date.now() + 2 * 60_000);
+        }
+        approvalObserved = nextApprovalObserved;
         dispatch({
           type: "sandbox-result",
           result,
-          stage: "sandbox_closing",
+          stage: approvalObserved ? "sandbox_closing" : "sandbox_payment",
         });
-        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        await waitForPoll(controller.signal, 1_500);
       }
       if (!controller.signal.aborted) {
         throw Object.assign(
           new Error(
-            "Prava sandbox confirmation is taking longer than expected.",
+            approvalObserved
+              ? "Prava approved the sandbox session, but final confirmation is taking longer than expected."
+              : "The Prava sandbox approval window expired before device approval completed.",
           ),
-          { code: "CHECKOUT_RESULT_UNKNOWN" },
+          {
+            code: approvalObserved
+              ? "CHECKOUT_RESULT_UNKNOWN"
+              : "PAYMENT_SESSION_EXPIRED",
+          },
         );
       }
     } catch (error) {
       if (!controller.signal.aborted) dispatch({ type: "error", error });
+    } finally {
+      if (paymentAbort.current === controller) {
+        if (sandboxPollSessionId.current === sessionId) {
+          sandboxPollSessionId.current = null;
+        }
+        paymentAbort.current = null;
+      }
     }
   }, [state.sandboxSession]);
+
+  const acknowledgePaymentSurface = useCallback(() => {
+    paymentSurfaceApproved.current = true;
+    dispatch({ type: "stage", stage: "checkout" });
+  }, []);
+
+  const acknowledgeSandboxSurface = useCallback(() => {
+    sandboxSurfaceApproved.current = true;
+    dispatch({ type: "stage", stage: "sandbox_closing" });
+  }, []);
+
+  const stopPaymentWithError = useCallback((error: unknown) => {
+    paymentSurfaceFailed.current = true;
+    dispatch({ type: "error", error });
+  }, []);
+
+  const paymentSessionId = state.paymentSession?.paymentSessionId;
+  useEffect(() => {
+    if (paymentSessionId) void pollPayment();
+  }, [paymentSessionId, pollPayment]);
+
+  const sandboxCheckId = state.sandboxSession?.sandboxCheckId;
+  useEffect(() => {
+    if (sandboxCheckId) void pollSandboxApproval();
+  }, [pollSandboxApproval, sandboxCheckId]);
+
+  const reset = useCallback(() => {
+    streamAbort.current?.abort();
+    paymentAbort.current?.abort();
+    paymentPollSessionId.current = null;
+    sandboxPollSessionId.current = null;
+    paymentSurfaceApproved.current = false;
+    paymentSurfaceFailed.current = false;
+    sandboxSurfaceApproved.current = false;
+    sandboxSessionPending.current = false;
+    dispatch({ type: "reset" });
+  }, []);
 
   useEffect(
     () => () => {
       streamAbort.current?.abort();
       paymentAbort.current?.abort();
+      paymentPollSessionId.current = null;
+      sandboxPollSessionId.current = null;
     },
     [],
   );
@@ -628,10 +825,12 @@ export function useScanFlow() {
       approveWithPrava,
       pollPayment,
       pollSandboxApproval,
+      acknowledgePaymentSurface,
+      acknowledgeSandboxSurface,
       retryInspection,
       refreshMerchantOffers,
-      stopWithError: (error: unknown) => dispatch({ type: "error", error }),
-      reset: () => dispatch({ type: "reset" }),
+      stopWithError: stopPaymentWithError,
+      reset,
     },
   };
 }

@@ -6,7 +6,10 @@ import {
   validateFinalTotal,
 } from "../src/common/money";
 import { redactSensitive } from "../src/common/redaction";
-import { reconcilePublicPaymentState } from "../src/modules/payments/payment-status-policy";
+import {
+  reconcilePublicPaymentState,
+  shouldExpirePendingPayment,
+} from "../src/modules/payments/payment-status-policy";
 import {
   assertScanTransition,
   canTransitionScan,
@@ -94,6 +97,26 @@ describe("deterministic policies", () => {
     expect(reconcilePublicPaymentState("completed", "COMPLETED")).toBe(
       "completed",
     );
+  });
+
+  test("expires only an unapproved pending Prava session", () => {
+    const now = new Date("2026-08-02T12:00:00.000Z");
+    expect(
+      shouldExpirePendingPayment({
+        providerStatus: "pending",
+        localStatus: "PENDING",
+        expiresAt: "2026-08-02T11:59:59.000Z",
+        now,
+      }),
+    ).toBeTrue();
+    expect(
+      shouldExpirePendingPayment({
+        providerStatus: "awaiting_result",
+        localStatus: "AWAITING_RESULT",
+        expiresAt: "2026-08-02T11:59:59.000Z",
+        now,
+      }),
+    ).toBeFalse();
   });
 
   test("requires both halves of the restricted checkout executor", () => {

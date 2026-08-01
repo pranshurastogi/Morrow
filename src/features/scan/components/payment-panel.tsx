@@ -1,7 +1,19 @@
-import { Clock3, ShieldCheck } from "lucide-react";
+import {
+  BadgeCheck,
+  Clock3,
+  Fingerprint,
+  KeyRound,
+  PackageCheck,
+  ShieldCheck,
+} from "lucide-react";
 import { Plate, StatusStamp } from "@/components/morrow/bits";
-import type { EmbeddedPaymentSession, Offer } from "../api/types";
+import type {
+  EmbeddedPaymentSession,
+  Offer,
+  PublicPaymentResult,
+} from "../api/types";
 import { PravaCardForm } from "./prava-card-form";
+import { TransactionMilestone } from "./transaction-milestone";
 
 export function PaymentPanel({
   session,
@@ -67,6 +79,103 @@ export function PaymentPanel({
           onSuccess={onSuccess}
           onError={onError}
         />
+      </Plate>
+    </section>
+  );
+}
+
+export function PaymentStatusPanel({
+  offer,
+  result,
+}: {
+  offer: Offer;
+  result: PublicPaymentResult | null;
+}) {
+  const credentialReady = Boolean(
+    result &&
+    (result.providerStatus !== "pending" ||
+      result.checkoutStatus !== "PENDING"),
+  );
+  const checkoutStarted = Boolean(
+    result &&
+    ["CHECKOUT_IN_PROGRESS", "COMPLETED"].includes(result.checkoutStatus),
+  );
+  const orderConfirmed = result?.status === "completed";
+
+  const copy =
+    result?.checkoutStatus === "CHECKOUT_IN_PROGRESS"
+      ? {
+          title: "Completing the dispatch.",
+          message:
+            "The merchant checkout is running with the amount- and merchant-scoped Prava credential.",
+        }
+      : credentialReady
+        ? {
+            title: "Approval verified.",
+            message:
+              "Prava issued the bounded credential. Morrow is waiting for the merchant checkout record.",
+          }
+        : {
+            title: "Approval received.",
+            message:
+              "The secure form is closed. Morrow is reading Prava’s server-side result.",
+          };
+
+  return (
+    <section
+      className="receipt-enter"
+      aria-labelledby="payment-status-title"
+      aria-busy="true"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StatusStamp tone="info">Checking Prava</StatusStamp>
+        <span className="font-mono text-[10px] text-muted-foreground">
+          {result?.checkoutStatus.replaceAll("_", " ") ?? "APPROVAL RECEIVED"}
+        </span>
+      </div>
+      <h1 id="payment-status-title" className="mt-5 text-3xl">
+        {copy.title}
+      </h1>
+      <p
+        className="mt-3 text-sm leading-relaxed text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
+        {copy.message}
+      </p>
+
+      <div className="sandbox-verification-rule mt-5" aria-hidden />
+      <Plate className="mt-3 p-4">
+        <ol className="relative before:absolute before:bottom-4 before:left-4 before:top-4 before:w-px before:bg-border">
+          <TransactionMilestone
+            complete
+            active={false}
+            icon={Fingerprint}
+            title="Device approval received"
+            detail="Card entry and passkey approval stayed inside Prava."
+          />
+          <TransactionMilestone
+            complete={credentialReady}
+            active={!credentialReady}
+            icon={KeyRound}
+            title="Scoped credential"
+            detail={`${offer.merchant.name} · limited to this approved total`}
+          />
+          <TransactionMilestone
+            complete={checkoutStarted}
+            active={credentialReady && !checkoutStarted}
+            icon={PackageCheck}
+            title="Merchant checkout"
+            detail="Morrow requires a verified merchant order identifier."
+          />
+          <TransactionMilestone
+            complete={orderConfirmed}
+            active={checkoutStarted && !orderConfirmed}
+            icon={BadgeCheck}
+            title="Final confirmation"
+            detail="Prava and the merchant must both report completion."
+          />
+        </ol>
       </Plate>
     </section>
   );
