@@ -1,0 +1,172 @@
+import type { Sql } from "postgres";
+import { createHash } from "node:crypto";
+import type { NormalizedOffer } from "../../domain/commerce";
+import { getDatabase } from "../../infrastructure/database/client";
+import type { CanonicalProductCandidate } from "../matching/verification";
+import { normalizedSizeSchema } from "../../domain/product-observation";
+import {
+  rankOffers,
+  type OfferRequirements,
+  verifyMerchantVariant,
+} from "./offer-policy";
+
+function stableOfferId(scanId: string, listingId: string): string {
+  const bytes = Buffer.from(
+    createHash("sha256")
+      .update(`${scanId}:${listingId}`)
+      .digest("hex")
+      .slice(0, 32),
+    "hex",
+  );
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function mapProduct(row: Record<string, unknown>): CanonicalProductCandidate {
+  const size = normalizedSizeSchema.safeParse({
+    value: Number(row.size_value),
+    unit: row.size_unit,
+  });
+  return {
+    id: String(row.id),
+    category: String(row.category),
+    brand: row.brand === null ? null : String(row.brand),
+    name: String(row.name),
+    variant: row.variant === null ? null : String(row.variant),
+    size: size.success ? size.data : null,
+    gtin: row.gtin === null ? null : String(row.gtin),
+    upc: row.upc === null ? null : String(row.upc),
+    ean: row.ean === null ? null : String(row.ean),
+    mpn: row.mpn === null ? null : String(row.mpn),
+    modelNumber: row.model_number === null ? null : String(row.model_number),
+    attributes: (row.attributes as Record<string, unknown>) ?? {},
+    retrievalScore: 1,
+    imageSimilarity: 0,
+    historyMatch: false,
+  };
+}
+
+export async function searchVerifiedListings(
+  input: { scanId: string; productId: string; requirements: OfferRequirements },
+  sql: Sql = getDatabase(),
+) {
+  const [productRow] =
+    await sql`select * from canonical_products where id = ${input.productId}`;
+  if (!productRow) return [];
+  const product = mapProduct(productRow);
+  const rows = await sql`
+    select ml.*, m.slug as merchant_slug, m.name as merchant_name, m.domain,
+      m.country_code, m.provider, m.trust_score, m.authorized_seller
+    from merchant_listings ml join merchants m on m.id = ml.merchant_id
+    where ml.canonical_product_id = ${input.productId} and m.active = true
+      and ml.price_minor is not null and ml.currency is not null
+      and ml.product_url is not null and ml.last_seen_at > now() - interval '1 day'
+  `;
+  const offers: NormalizedOffer[] = rows.map((row) => {
+    const offer: NormalizedOffer = {
+      id: stableOfferId(input.scanId, String(row.id)),
+      provider:
+        row.provider === "prava_ucp"
+          ? "prava_ucp"
+          : row.provider === "shopify_ucp"
+            ? "shopify_ucp"
+            : "manual",
+      merchant: {
+        id: String(row.merchant_id),
+        name: String(row.merchant_name),
+        url: `https://${String(row.domain)}`,
+        countryCode: String(row.country_code ?? "IN").trim(),
+        trustScore: row.trust_score === null ? null : Number(row.trust_score),
+        authorizedSeller:
+          row.authorized_seller === null
+            ? null
+            : Boolean(row.authorized_seller),
+      },
+      product: {
+        externalProductId: String(row.external_product_id),
+        externalVariantId: String(row.external_variant_id),
+        title: String(row.title),
+        imageUrl: row.image_url === null ? null : String(row.image_url),
+        attributes: Object.fromEntries(
+          Object.entries((row.attributes as Record<string, unknown>) ?? {}).map(
+            ([key, value]) => [key, String(value)],
+          ),
+        ),
+      },
+      price: {
+        subtotalMinor: Number(row.price_minor),
+        shippingMinor: null,
+        taxMinor: null,
+        estimatedTotalMinor: Number(row.price_minor),
+        currency: String(row.currency).trim(),
+        isBinding: false,
+      },
+      inventory: {
+        status: ["in_stock", "limited", "out_of_stock"].includes(
+          String(row.availability),
+        )
+          ? (row.availability as "in_stock" | "limited" | "out_of_stock")
+          : "unknown",
+      },
+      delivery: null,
+      returns: null,
+      identityVerification: { status: "likely", score: 0, contradictions: [] },
+      illustrative: false,
+    };
+    return {
+      ...offer,
+      identityVerification: verifyMerchantVariant(product, offer),
+    };
+  });
+  const ranked = rankOffers(offers, input.requirements);
+
+  await sql.begin(async (transaction) => {
+    for (const item of ranked) {
+      await transaction`
+        insert into offers (
+          id, scan_id, canonical_product_id, merchant_id, provider, provider_offer_id,
+          external_product_id, external_variant_id, subtotal_minor, shipping_minor, tax_minor,
+          estimated_total_minor, currency, inventory_status, identity_status, identity_score,
+          ranking_score, ranking_reasons, rejected_reasons, illustrative, snapshot, expires_at
+        ) values (
+          ${item.id}, ${input.scanId}, ${input.productId}, ${item.merchant.id}, ${item.provider},
+          ${`${item.merchant.id}:${item.product.externalVariantId}`}, ${item.product.externalProductId},
+          ${item.product.externalVariantId}, ${item.price.subtotalMinor}, ${item.price.shippingMinor},
+          ${item.price.taxMinor}, ${item.price.estimatedTotalMinor}, ${item.price.currency},
+          ${item.inventory.status}, ${item.identityVerification.status}, ${item.identityVerification.score},
+          ${item.rankingScore}, ${transaction.json(item.rankingReasons)}, ${transaction.json(item.rejectedReasons)},
+          ${item.illustrative}, ${transaction.json(item)}, now() + interval '10 minutes'
+        ) on conflict (scan_id, provider, provider_offer_id) do update set
+          canonical_product_id = excluded.canonical_product_id,
+          estimated_total_minor = excluded.estimated_total_minor, identity_status = excluded.identity_status,
+          identity_score = excluded.identity_score, ranking_score = excluded.ranking_score,
+          ranking_reasons = excluded.ranking_reasons, rejected_reasons = excluded.rejected_reasons,
+          snapshot = excluded.snapshot, expires_at = excluded.expires_at, created_at = now()
+      `;
+    }
+  });
+  return ranked;
+}
+
+export async function listOffersForUser(
+  scanId: string,
+  productId: string,
+  userId: string,
+  sql: Sql = getDatabase(),
+) {
+  const rows = await sql`
+    select o.snapshot, o.ranking_score, o.ranking_reasons, o.rejected_reasons, o.expires_at
+    from offers o join scans s on s.id = o.scan_id
+    where o.scan_id = ${scanId} and o.canonical_product_id = ${productId} and s.user_id = ${userId}
+    order by o.ranking_score desc nulls last
+  `;
+  return rows.map((row) => ({
+    ...row.snapshot,
+    rankingScore: Number(row.ranking_score),
+    rankingReasons: row.ranking_reasons,
+    rejectedReasons: row.rejected_reasons,
+    expiresAt: new Date(String(row.expires_at)).toISOString(),
+  }));
+}

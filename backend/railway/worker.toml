@@ -1,0 +1,8 @@
+[build]
+builder = "RAILPACK"
+buildCommand = "bun install --frozen-lockfile && bun run typecheck:backend"
+
+[deploy]
+startCommand = "bun run --cwd backend start:worker"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

@@ -109,6 +109,10 @@ dist
 
 # Serverless directories
 .serverless/
+.vercel/
+.railway/
+backend/dist/
+backend/.cache/
 
 # FuseBox cache
 .fusebox/

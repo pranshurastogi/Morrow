@@ -3,16 +3,31 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "workspaces": [
+    "backend"
+  ],
   "scripts": {
     "dev": "vite dev",
-    "build": "bash scripts/build-site.sh",
+    "dev:web": "vite dev",
+    "dev:api": "bun run --cwd backend dev:api",
+    "dev:worker": "bun run --cwd backend dev:worker",
+    "build": "bun run build:web && bun run typecheck:backend",
+    "build:web": "bash scripts/frontend/build.sh",
+    "build:vercel": "NITRO_PRESET=vercel bun run build:web",
     "build:dev": "vite build --mode development",
+    "start": "node .output/server/index.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit && bun run typecheck:backend",
+    "typecheck:backend": "bun run --cwd backend typecheck",
+    "check": "bash scripts/quality/check.sh",
+    "db:migrate": "bun scripts/database/migrate.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@prava-sdk/core": "^0.1.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",

@@ -1,0 +1,55 @@
+export const SCAN_STATUSES = [
+  "CREATED",
+  "IMAGE_UPLOADED",
+  "PREPROCESSING",
+  "EVIDENCE_EXTRACTED",
+  "REQUIRES_MORE_EVIDENCE",
+  "CANDIDATES_RETRIEVED",
+  "VERIFYING",
+  "EXACT_VERIFIED",
+  "SIMILAR_FOUND",
+  "AMBIGUOUS",
+  "SEARCHING_MERCHANTS",
+  "OFFERS_READY",
+  "AWAITING_APPROVAL",
+  "PAYMENT_SESSION_CREATED",
+  "CHECKOUT_IN_PROGRESS",
+  "ORDER_COMPLETED",
+  "CHECKOUT_FAILED",
+] as const;
+
+export type ScanStatus = (typeof SCAN_STATUSES)[number];
+
+const allowedTransitions: Record<ScanStatus, readonly ScanStatus[]> = {
+  CREATED: ["IMAGE_UPLOADED"],
+  IMAGE_UPLOADED: ["PREPROCESSING"],
+  PREPROCESSING: ["EVIDENCE_EXTRACTED", "REQUIRES_MORE_EVIDENCE"],
+  EVIDENCE_EXTRACTED: ["REQUIRES_MORE_EVIDENCE", "CANDIDATES_RETRIEVED"],
+  REQUIRES_MORE_EVIDENCE: ["IMAGE_UPLOADED"],
+  CANDIDATES_RETRIEVED: ["VERIFYING"],
+  VERIFYING: ["EXACT_VERIFIED", "SIMILAR_FOUND", "AMBIGUOUS"],
+  EXACT_VERIFIED: ["SEARCHING_MERCHANTS"],
+  SIMILAR_FOUND: ["AWAITING_APPROVAL"],
+  AMBIGUOUS: ["REQUIRES_MORE_EVIDENCE", "IMAGE_UPLOADED"],
+  SEARCHING_MERCHANTS: ["OFFERS_READY", "CHECKOUT_FAILED"],
+  OFFERS_READY: ["AWAITING_APPROVAL"],
+  AWAITING_APPROVAL: ["PAYMENT_SESSION_CREATED"],
+  PAYMENT_SESSION_CREATED: ["CHECKOUT_IN_PROGRESS", "CHECKOUT_FAILED"],
+  CHECKOUT_IN_PROGRESS: ["ORDER_COMPLETED", "CHECKOUT_FAILED"],
+  ORDER_COMPLETED: [],
+  CHECKOUT_FAILED: ["AWAITING_APPROVAL"],
+};
+
+export function canTransitionScan(from: ScanStatus, to: ScanStatus): boolean {
+  return allowedTransitions[from].includes(to);
+}
+
+export function assertScanTransition(from: ScanStatus, to: ScanStatus): void {
+  if (!canTransitionScan(from, to)) {
+    throw new Error(`Invalid scan transition: ${from} -> ${to}`);
+  }
+}
+
+export function isTerminalScanStatus(status: ScanStatus): boolean {
+  return status === "ORDER_COMPLETED";
+}
