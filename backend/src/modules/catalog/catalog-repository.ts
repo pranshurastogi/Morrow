@@ -310,6 +310,7 @@ export async function listCandidatesForUser(
     join scans s on s.id = sc.scan_id
     join canonical_products cp on cp.id = sc.product_id
     where sc.scan_id = ${scanId} and s.user_id = ${userId}
+      and sc.classification in ('exact_verified', 'likely_exact', 'similar')
     order by sc.rank
   `;
 }

@@ -6,7 +6,7 @@ import { getEnvironment } from "../../config/env";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
 import type { CanonicalProductCandidate } from "./verification";
 
-const PROMPT_VERSION = "morrow-candidate-comparison-2026-08-01.1";
+const PROMPT_VERSION = "morrow-candidate-comparison-2026-08-01.2";
 
 const visualComparisonSchema = z.object({
   candidates: z.array(
@@ -93,13 +93,24 @@ function getClient(): OpenAI {
   return client;
 }
 
+export function selectVisualComparisonCandidates(
+  candidates: CanonicalProductCandidate[],
+): CanonicalProductCandidate[] {
+  return (
+    candidates
+      .filter((candidate) => candidate.imageUrl)
+      // A single product family commonly exposes several sizes and multipacks.
+      // Compare every retrieved finalist so a sellable storefront variant is not
+      // rejected merely because it appeared after the first five catalogue rows.
+      .slice(0, 10)
+  );
+}
+
 export async function compareCandidatesVisually(input: {
   scanImages: Array<{ image: Buffer; role: string; sha256: string }>;
   candidates: CanonicalProductCandidate[];
 }): Promise<CanonicalProductCandidate[]> {
-  const comparable = input.candidates
-    .filter((candidate) => candidate.imageUrl)
-    .slice(0, 5);
+  const comparable = selectVisualComparisonCandidates(input.candidates);
   if (input.scanImages.length === 0 || comparable.length === 0) {
     return input.candidates;
   }

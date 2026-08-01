@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { calculateVisualSimilarity } from "../src/modules/matching/openai-candidate-verifier";
+import {
+  calculateVisualSimilarity,
+  selectVisualComparisonCandidates,
+} from "../src/modules/matching/openai-candidate-verifier";
+import type { CanonicalProductCandidate } from "../src/modules/matching/verification";
 
 describe("visual candidate policy", () => {
   test("scores observable similarities without granting exact identity", () => {
@@ -28,5 +32,37 @@ describe("visual candidate policy", () => {
         exactVariantVisuallySupported: false,
       }),
     ).toBe(0);
+  });
+
+  test("compares every retrieved finalist with an available image", () => {
+    const candidates: CanonicalProductCandidate[] = Array.from(
+      { length: 12 },
+      (_, index) => ({
+        id: `candidate-${index}`,
+        category: "skin care",
+        brand: "Mamaearth",
+        name: `Face Wash ${index}`,
+        variant: null,
+        size: { value: 50 + index * 50, unit: "ml" },
+        gtin: null,
+        upc: null,
+        ean: null,
+        mpn: null,
+        modelNumber: null,
+        attributes: {},
+        retrievalScore: 1,
+        imageSimilarity: 0,
+        historyMatch: false,
+        imageUrl:
+          index === 3 ? null : `https://cdn.example/candidate-${index}.png`,
+      }),
+    );
+
+    const selected = selectVisualComparisonCandidates(candidates);
+    expect(selected).toHaveLength(10);
+    expect(selected.map((candidate) => candidate.id)).toContain("candidate-10");
+    expect(selected.map((candidate) => candidate.id)).not.toContain(
+      "candidate-3",
+    );
   });
 });
