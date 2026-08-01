@@ -20,9 +20,9 @@ const optionSchema = z
 const sellerSchema = z
   .object({
     id: z.string().optional(),
-    name: z.string().min(1),
-    url: z.url(),
-    domain: z.string().min(1),
+    name: z.string().min(1).optional(),
+    url: z.url().optional(),
+    domain: z.string().min(1).optional(),
   })
   .passthrough();
 
@@ -31,7 +31,7 @@ export const ucpVariantSchema = z
     id: z.string().min(1),
     title: z.string().min(1),
     description: descriptionSchema,
-    url: z.url(),
+    url: z.url().optional(),
     price: z.object({
       amount: z.number().int().nonnegative(),
       currency: z.string().length(3),
@@ -42,7 +42,7 @@ export const ucpVariantSchema = z
       .optional(),
     options: z.array(optionSchema).default([]),
     media: z.array(mediaSchema).default([]),
-    seller: sellerSchema,
+    seller: sellerSchema.optional(),
     checkout_url: z.url().optional(),
     eligible: z
       .object({ native_checkout: z.boolean().optional() })
@@ -56,6 +56,7 @@ export const ucpProductSchema = z
     id: z.string().min(1),
     title: z.string().min(1),
     description: descriptionSchema,
+    url: z.url().optional(),
     media: z.array(mediaSchema).default([]),
     variants: z.array(ucpVariantSchema).default([]),
     metadata: z.record(z.string(), z.unknown()).optional(),

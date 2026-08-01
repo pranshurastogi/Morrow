@@ -10,6 +10,7 @@ import {
   getOffers,
   getPaymentStatus,
   getScan,
+  retryScan,
   watchScan,
 } from "../api/client";
 import type {
@@ -282,6 +283,17 @@ export function useScanFlow() {
     [followScan, state.scan],
   );
 
+  const retryInspection = useCallback(async () => {
+    if (!state.scan) return;
+    dispatch({ type: "stage", stage: "inspecting" });
+    try {
+      await retryScan(state.scan.id);
+      await followScan(state.scan.id);
+    } catch (error) {
+      dispatch({ type: "error", error });
+    }
+  }, [followScan, state.scan]);
+
   const requestAuthority = useCallback(async () => {
     if (!state.scan?.selectedProductId || !state.selectedOffer) return;
     try {
@@ -382,6 +394,7 @@ export function useScanFlow() {
       requestAuthority,
       approveWithPrava,
       pollPayment,
+      retryInspection,
       reset: () => dispatch({ type: "reset" }),
     },
   };

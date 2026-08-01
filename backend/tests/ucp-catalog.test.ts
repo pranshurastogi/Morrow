@@ -82,6 +82,39 @@ describe("Shopify UCP catalogue normalization", () => {
     );
   });
 
+  test("accepts a storefront variant that inherits its merchant and URL", () => {
+    const product = ucpProductSchema.parse({
+      id: "gid://shopify/Product/mamaearth",
+      title:
+        "Rice Dewy Bright Face Wash With Rice Water & Niacinamide - 150 ml",
+      url: "https://mamaearth.in/products/rice-face-wash",
+      media: [{ type: "image", url: "https://cdn.example/mamaearth.png" }],
+      variants: [
+        {
+          id: "gid://shopify/ProductVariant/mamaearth",
+          title: "Default Title",
+          price: { amount: 41900, currency: "INR" },
+          availability: { available: true },
+          options: [{ name: "Title", label: "Default Title" }],
+        },
+      ],
+    });
+    const normalized = normalizeUcpVariant({
+      product,
+      variant: product.variants[0]!,
+      observation: { ...observation, brand: "Mamaearth" },
+      sourceEndpoint: "https://mamaearthprod.myshopify.com/api/ucp/mcp",
+    });
+    expect(normalized.merchantName).toBe("Mamaearth");
+    expect(normalized.merchantCountryCode).toBe("IN");
+    expect(normalized.productUrl).toBe(
+      "https://mamaearth.in/products/rice-face-wash",
+    );
+    expect(normalized.size).toEqual({ value: 150, unit: "ml" });
+    expect(normalized.title).toBe(product.title);
+    expect(normalized.variant).toBeNull();
+  });
+
   test("rejects a catalogue endpoint that could become an SSRF target", () => {
     expect(() =>
       assertAllowedUcpEndpoint("http://127.0.0.1:3000/api/ucp/mcp"),

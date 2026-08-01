@@ -57,10 +57,12 @@ export function CompletionPanel({
 export function ErrorPanel({
   code,
   message,
+  onRetry,
   onReset,
 }: {
   code: string;
   message: string;
+  onRetry?: () => void;
   onReset: () => void;
 }) {
   return (
@@ -72,9 +74,14 @@ export function ErrorPanel({
         {message}
       </p>
       <p className="mt-3 font-mono text-[11px] text-postal">{code}</p>
+      {onRetry && (
+        <Button className="mt-6 min-h-11 w-full" onClick={onRetry}>
+          Try this inspection again
+        </Button>
+      )}
       <Button
         variant="outline"
-        className="mt-6 min-h-11 w-full"
+        className={onRetry ? "mt-2 min-h-11 w-full" : "mt-6 min-h-11 w-full"}
         onClick={onReset}
       >
         Begin another inspection

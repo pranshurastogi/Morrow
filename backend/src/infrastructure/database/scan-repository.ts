@@ -492,3 +492,23 @@ export async function setScanError(
     where id = ${scanId}
   `;
 }
+
+export async function clearScanErrorForRetry(
+  input: { scanId: string; userId: string; version: number },
+  sql: Sql = getDatabase(),
+): Promise<ScanRecord> {
+  const [row] = await sql`
+    update scans set error_code = null, error_message = null, version = version + 1
+    where id = ${input.scanId} and user_id = ${input.userId}
+      and version = ${input.version}
+    returning *
+  `;
+  if (!row) {
+    throw new MorrowError({
+      code: "INTERNAL_ERROR",
+      message: "The inspection changed before it could be retried",
+      statusCode: 409,
+    });
+  }
+  return mapScan(row);
+}

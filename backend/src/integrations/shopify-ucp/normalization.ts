@@ -84,6 +84,7 @@ function inferredBrand(
   product: UcpProduct,
   variant: UcpVariant,
   observation: ProductObservation,
+  registryMerchantName: string | null,
 ): string | null {
   const declared = recordString(product, "brand", "vendor", "manufacturer");
   if (declared) return declared;
@@ -95,15 +96,24 @@ function inferredBrand(
         product.description?.plain,
         variant.title,
         variant.description?.plain,
-        variant.seller.name,
+        variant.seller?.name,
+        registryMerchantName,
       ]
         .filter(Boolean)
         .join(" "),
     );
     if (visibleSource.includes(normalizeText(observed))) return observed;
   }
-  const merchant = merchantByDomain(variant.seller.domain);
-  return merchant ? merchant.name : null;
+  return registryMerchantName;
+}
+
+function hostnameFromUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 export interface NormalizedUcpVariant {
@@ -138,12 +148,20 @@ export function normalizeUcpVariant(input: {
   product: UcpProduct;
   variant: UcpVariant;
   observation: ProductObservation;
+  sourceEndpoint?: string;
 }): NormalizedUcpVariant {
-  const { product, variant, observation } = input;
-  const optionText = variant.options
+  const { product, variant, observation, sourceEndpoint } = input;
+  const meaningfulOptions = variant.options.filter(
+    (option) =>
+      !(
+        normalizeText(option.name) === "title" &&
+        normalizeText(option.label) === "default title"
+      ),
+  );
+  const optionText = meaningfulOptions
     .map((option) => `${option.name}: ${option.label}`)
     .join(" · ");
-  const sizeOption = variant.options.find((option) =>
+  const sizeOption = meaningfulOptions.find((option) =>
     /size|volume|weight|capacity/i.test(option.name),
   );
   const size = parseCatalogSize(
@@ -152,29 +170,65 @@ export function normalizeUcpVariant(input: {
     variant.title,
     product.title,
   );
-  const registryMerchant = merchantByDomain(variant.seller.domain);
+  const sourceHost = hostnameFromUrl(sourceEndpoint);
+  const variantHost = hostnameFromUrl(
+    variant.url ?? variant.checkout_url ?? product.url,
+  );
+  const sellerHost =
+    variant.seller?.domain?.toLowerCase().replace(/^www\./, "") ??
+    hostnameFromUrl(variant.seller?.url);
+  const registryMerchant = [sellerHost, variantHost, sourceHost]
+    .filter((value): value is string => Boolean(value))
+    .map((domain) => merchantByDomain(domain))
+    .find(Boolean);
+  const merchantPublicDomain =
+    hostnameFromUrl(variant.seller?.url) ??
+    variantHost ??
+    registryMerchant?.domain ??
+    sellerHost ??
+    sourceHost ??
+    "catalog.shopify.com";
+  const merchantUcpDomain =
+    registryMerchant !== undefined
+      ? new URL(registryMerchant.endpoint).hostname
+      : (sellerHost ?? sourceHost ?? merchantPublicDomain);
   const merchantEndpoint =
     registryMerchant?.endpoint ??
-    `https://${variant.seller.domain.replace(/^https?:\/\//, "")}/api/ucp/mcp`;
-  const merchantPublicDomain = new URL(variant.seller.url).hostname.replace(
-    /^www\./,
-    "",
-  );
+    sourceEndpoint ??
+    `https://${merchantUcpDomain.replace(/^https?:\/\//, "")}/api/ucp/mcp`;
   const imageUrl = variant.media[0]?.url ?? product.media[0]?.url ?? null;
   const barcode = recordString(variant, "barcode", "gtin", "ean", "upc");
   const gtin = recordString(variant, "gtin") ?? barcode;
   const options = Object.fromEntries(
-    variant.options.map((option) => [
+    meaningfulOptions.map((option) => [
       `option_${normalizeText(option.name).replaceAll(" ", "_")}`,
       option.label,
     ]),
   );
+  const listingTitle = /^default title$/i.test(variant.title.trim())
+    ? product.title
+    : variant.title;
+  const productUrl =
+    variant.url ??
+    product.url ??
+    variant.checkout_url ??
+    variant.seller?.url ??
+    `https://${merchantPublicDomain}`;
   return {
     category: observation.subcategory ?? observation.category,
-    brand: inferredBrand(product, variant, observation),
+    brand: inferredBrand(
+      product,
+      variant,
+      observation,
+      registryMerchant?.name ?? null,
+    ),
     name: product.title,
     variant:
-      optionText || (variant.title !== product.title ? variant.title : null),
+      optionText ||
+      (variant.title !== product.title &&
+      !/^default title$/i.test(variant.title)
+        ? variant.title
+        : null),
     size,
     gtin,
     upc: recordString(variant, "upc"),
@@ -182,16 +236,17 @@ export function normalizeUcpVariant(input: {
     mpn: recordString(variant, "mpn", "part_number"),
     modelNumber: recordString(variant, "model_number", "model"),
     imageUrl,
-    merchantName: variant.seller.name,
+    merchantName:
+      variant.seller?.name ?? registryMerchant?.name ?? merchantPublicDomain,
     merchantCountryCode: registryMerchant ? "IN" : null,
     merchantPublicDomain,
-    merchantUcpDomain: variant.seller.domain,
+    merchantUcpDomain,
     merchantEndpoint,
     externalProductId: product.id,
     externalVariantId: variant.id,
-    productUrl: variant.url,
+    productUrl,
     checkoutUrl: variant.checkout_url ?? null,
-    title: variant.title,
+    title: listingTitle,
     priceMinor: variant.price.amount,
     currency: variant.price.currency.toUpperCase(),
     availability:
@@ -204,7 +259,7 @@ export function normalizeUcpVariant(input: {
       source_provider: "shopify_ucp",
       source_product_id: product.id,
       source_variant_id: variant.id,
-      source_merchant_domain: variant.seller.domain,
+      source_merchant_domain: merchantUcpDomain,
       ucp_endpoint: merchantEndpoint,
       ...(size ? { size_value: String(size.value), size_unit: size.unit } : {}),
       ...(gtin ? { gtin } : {}),

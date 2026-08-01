@@ -30,7 +30,10 @@ export function buildCatalogQuery(observation: ProductObservation): string {
 
 function productKey(product: UcpProduct): string {
   const variants = product.variants
-    .map((variant) => `${normalizeText(variant.seller.domain)}:${variant.id}`)
+    .map(
+      (variant) =>
+        `${normalizeText(variant.seller?.domain ?? "unknown")}:${variant.id}`,
+    )
     .sort()
     .join("|");
   return variants || product.id;

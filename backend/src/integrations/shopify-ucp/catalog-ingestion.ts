@@ -57,6 +57,7 @@ export async function ingestUcpCatalog(input: {
             product,
             variant,
             observation: input.observation,
+            sourceEndpoint: result.sourceEndpoint,
           });
           const identityKey = catalogIdentityKey({
             brand: normalized.brand,

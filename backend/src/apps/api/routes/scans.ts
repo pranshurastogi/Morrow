@@ -5,6 +5,7 @@ import { frontendOrigins, getEnvironment } from "../../../config/env";
 import {
   createScan,
   addScanImages,
+  clearScanErrorForRetry,
   confirmScanProduct,
   getEvidence,
   getScanForUser,
@@ -196,8 +197,15 @@ export const scanRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
-    await enqueueScan(scan.id, `retry-${Date.now()}`);
-    return reply.code(202).send({ scanId: scan.id, status: scan.status });
+    const retrying = await clearScanErrorForRetry({
+      scanId: scan.id,
+      userId: request.principal.userId,
+      version: scan.version,
+    });
+    await enqueueScan(retrying.id, `retry-${retrying.version}`);
+    return reply
+      .code(202)
+      .send({ scanId: retrying.id, status: retrying.status });
   });
 
   app.get("/scans/:scanId/events", async (request, reply) => {

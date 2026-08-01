@@ -44,7 +44,10 @@ console.table(
     product.variants.slice(0, 2).map((variant) => ({
       product: product.title,
       variant: variant.options.map((option) => option.label).join(", "),
-      merchant: variant.seller.name,
+      merchant:
+        variant.seller?.name ??
+        variant.seller?.domain ??
+        (variant.url ? new URL(variant.url).hostname : "catalog result"),
       price: `${(variant.price.amount / 100).toFixed(2)} ${variant.price.currency}`,
       available: variant.availability?.available ?? "unknown",
     })),

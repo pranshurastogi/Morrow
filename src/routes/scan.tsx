@@ -82,6 +82,15 @@ function AuthenticatedScanDesk() {
     checkoutCapability,
     error,
   } = state;
+  const retryableInspection =
+    scan !== null &&
+    [
+      "PREPROCESSING",
+      "EVIDENCE_EXTRACTED",
+      "CANDIDATES_RETRIEVED",
+      "VERIFYING",
+      "SEARCHING_MERCHANTS",
+    ].includes(scan.status);
 
   return (
     <>
@@ -142,6 +151,9 @@ function AuthenticatedScanDesk() {
               error?.message ??
               "The operation stopped before a verified completion."
             }
+            {...(retryableInspection
+              ? { onRetry: () => void actions.retryInspection() }
+              : {})}
             onReset={actions.reset}
           />
         )}

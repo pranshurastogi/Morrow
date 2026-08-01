@@ -88,6 +88,13 @@ export function getScan(scanId: string): Promise<ScanRecord> {
   return apiRequest(`/scans/${scanId}`);
 }
 
+export function retryScan(scanId: string) {
+  return apiRequest<{ scanId: string; status: ScanRecord["status"] }>(
+    `/scans/${scanId}/retry`,
+    { method: "POST" },
+  );
+}
+
 export function getCandidates(
   scanId: string,
 ): Promise<{ candidates: Candidate[] }> {
