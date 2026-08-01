@@ -123,6 +123,34 @@ export function getOffers(
   );
 }
 
+export function refreshOffers(input: {
+  scanId: string;
+  productId: string;
+  currency: string;
+  maxTotalMinor?: number;
+}): Promise<{
+  offers: Offer[];
+  checkout: CheckoutCapability;
+  discovery: {
+    productCount: number;
+    merchantCount: number;
+    failedMerchantCount: number;
+  };
+}> {
+  return apiRequest(`/products/${input.productId}/offers/search`, {
+    method: "POST",
+    body: JSON.stringify({
+      scanId: input.scanId,
+      requirements: {
+        currency: input.currency,
+        ...(input.maxTotalMinor === undefined
+          ? {}
+          : { maxTotalMinor: input.maxTotalMinor }),
+      },
+    }),
+  });
+}
+
 const settledScanStatuses = new Set<ScanRecord["status"]>([
   "REQUIRES_MORE_EVIDENCE",
   "SIMILAR_FOUND",

@@ -1,5 +1,11 @@
 import { useRef } from "react";
-import { Camera, Check, CircleAlert, FlaskConical } from "lucide-react";
+import {
+  Camera,
+  Check,
+  CircleAlert,
+  FlaskConical,
+  RefreshCw,
+} from "lucide-react";
 import {
   EvidenceLedger,
   Plate,
@@ -29,6 +35,9 @@ export function ResultPanel({
   onGet,
   onSandboxTest,
   onSelectOffer,
+  onRefreshOffers,
+  offerRefreshing,
+  offerRefreshMessage,
   onReject,
 }: {
   scan: ScanRecord;
@@ -39,6 +48,9 @@ export function ResultPanel({
   onGet: () => void;
   onSandboxTest: () => void;
   onSelectOffer: (offer: Offer) => void;
+  onRefreshOffers: () => void;
+  offerRefreshing: boolean;
+  offerRefreshMessage: string | null;
   onReject: () => void;
 }) {
   const evidence = candidate.matched_evidence.map((item) => ({
@@ -52,6 +64,9 @@ export function ResultPanel({
       item.identityVerification.status === "verified" &&
       item.rejectedReasons.length === 0,
   );
+  const rejectionReasons = [
+    ...new Set(offers.flatMap((item) => item.rejectedReasons)),
+  ].slice(0, 3);
   const exact = candidate.classification === "exact_verified";
   const identityLabel = exact
     ? "Exact match verified"
@@ -227,8 +242,35 @@ export function ResultPanel({
                   : (scan.errorMessage ??
                     "No current merchant listing is available.")}
               </p>
+              {rejectionReasons.length > 0 && (
+                <ul className="mt-3 space-y-1 font-mono text-[11px] text-muted-foreground">
+                  {rejectionReasons.map((reason) => (
+                    <li key={reason}>— {reason}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4 min-h-11 w-full"
+            disabled={offerRefreshing}
+            onClick={onRefreshOffers}
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${offerRefreshing ? "animate-dial" : ""}`}
+              aria-hidden
+            />
+            {offerRefreshing
+              ? "Checking live catalogues"
+              : "Search merchants again"}
+          </Button>
+          {offerRefreshMessage && (
+            <p className="mt-3 text-xs text-muted-foreground" role="status">
+              {offerRefreshMessage}
+            </p>
+          )}
         </Plate>
       )}
 

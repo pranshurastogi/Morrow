@@ -13,6 +13,7 @@ import {
   getSandboxApprovalStatus,
   getScan,
   recordSandboxApprovalClientIssue,
+  refreshOffers,
   retryScan,
   watchScan,
 } from "../api/client";
@@ -60,6 +61,8 @@ interface State {
   sandboxResult: SandboxApprovalResult | null;
   sandboxIssue: PravaClientIssue | null;
   sandboxRestarting: boolean;
+  offerRefreshing: boolean;
+  offerRefreshMessage: string | null;
   error: { code: string; message: string } | null;
 }
 
@@ -82,6 +85,15 @@ type Action =
   | { type: "sandbox-payment"; session: SandboxApprovalSession }
   | { type: "sandbox-issue"; issue: PravaClientIssue }
   | { type: "sandbox-restarting"; restarting: boolean }
+  | { type: "offer-refreshing" }
+  | {
+      type: "offers-refreshed";
+      offers: Offer[];
+      selectedOffer: Offer | null;
+      checkoutCapability: CheckoutCapability;
+      message: string;
+    }
+  | { type: "offer-refresh-failed"; message: string }
   | {
       type: "sandbox-result";
       result: SandboxApprovalResult;
@@ -105,6 +117,8 @@ const initialState: State = {
   sandboxResult: null,
   sandboxIssue: null,
   sandboxRestarting: false,
+  offerRefreshing: false,
+  offerRefreshMessage: null,
   error: null,
 };
 
@@ -150,6 +164,8 @@ function reducer(state: State, action: Action): State {
         offers: action.offers,
         selectedOffer: action.selectedOffer,
         checkoutCapability: action.checkoutCapability,
+        offerRefreshing: false,
+        offerRefreshMessage: null,
         error: null,
       };
     case "review":
@@ -193,6 +209,27 @@ function reducer(state: State, action: Action): State {
       };
     case "sandbox-restarting":
       return { ...state, sandboxRestarting: action.restarting };
+    case "offer-refreshing":
+      return {
+        ...state,
+        offerRefreshing: true,
+        offerRefreshMessage: null,
+      };
+    case "offers-refreshed":
+      return {
+        ...state,
+        offers: action.offers,
+        selectedOffer: action.selectedOffer,
+        checkoutCapability: action.checkoutCapability,
+        offerRefreshing: false,
+        offerRefreshMessage: action.message,
+      };
+    case "offer-refresh-failed":
+      return {
+        ...state,
+        offerRefreshing: false,
+        offerRefreshMessage: action.message,
+      };
     case "sandbox-result":
       return { ...state, stage: action.stage, sandboxResult: action.result };
     case "error":
@@ -339,6 +376,53 @@ export function useScanFlow() {
       dispatch({ type: "error", error });
     }
   }, [followScan, state.scan]);
+
+  const refreshMerchantOffers = useCallback(async () => {
+    if (!state.scan?.selectedProductId || state.offerRefreshing) return;
+    dispatch({ type: "offer-refreshing" });
+    try {
+      const response = await refreshOffers({
+        scanId: state.scan.id,
+        productId: state.scan.selectedProductId,
+        currency: state.scan.currency ?? "INR",
+        ...(state.scan.maxBudgetMinor === null
+          ? {}
+          : { maxTotalMinor: state.scan.maxBudgetMinor }),
+      });
+      const selectedOffer =
+        response.offers.find(
+          (offer) =>
+            !offer.illustrative &&
+            offer.identityVerification.status === "verified" &&
+            offer.rejectedReasons.length === 0,
+        ) ?? null;
+      const merchantLabel = `${response.discovery.merchantCount} ${
+        response.discovery.merchantCount === 1 ? "catalogue" : "catalogues"
+      }`;
+      const unavailableLabel = response.discovery.failedMerchantCount
+        ? `; ${response.discovery.failedMerchantCount} source${
+            response.discovery.failedMerchantCount === 1 ? " was" : "s were"
+          } unavailable`
+        : "";
+      dispatch({
+        type: "offers-refreshed",
+        offers: response.offers,
+        selectedOffer,
+        checkoutCapability: response.checkout,
+        message: selectedOffer
+          ? `Dispatch refreshed across ${merchantLabel} and ${response.discovery.productCount} live products.`
+          : `Checked ${merchantLabel}${unavailableLabel}; no exact orderable variant is available right now.`,
+      });
+    } catch (error) {
+      dispatch({
+        type: "offer-refresh-failed",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Merchant catalogues could not be refreshed.",
+      });
+    }
+  }, [state.offerRefreshing, state.scan]);
 
   const requestAuthority = useCallback(async () => {
     if (!state.scan?.selectedProductId || !state.selectedOffer) return;
@@ -545,6 +629,7 @@ export function useScanFlow() {
       pollPayment,
       pollSandboxApproval,
       retryInspection,
+      refreshMerchantOffers,
       stopWithError: (error: unknown) => dispatch({ type: "error", error }),
       reset: () => dispatch({ type: "reset" }),
     },

@@ -88,6 +88,8 @@ function AuthenticatedScanDesk() {
     sandboxResult,
     sandboxIssue,
     sandboxRestarting,
+    offerRefreshing,
+    offerRefreshMessage,
     checkoutCapability,
     error,
   } = state;
@@ -135,6 +137,9 @@ function AuthenticatedScanDesk() {
             onGet={() => void actions.requestAuthority()}
             onSandboxTest={() => void actions.startSandboxApproval()}
             onSelectOffer={actions.selectOffer}
+            onRefreshOffers={() => void actions.refreshMerchantOffers()}
+            offerRefreshing={offerRefreshing}
+            offerRefreshMessage={offerRefreshMessage}
             onReject={actions.reset}
           />
         )}
