@@ -20,6 +20,10 @@ export type ScanStatus =
 export interface ScanRecord {
   id: string;
   status: ScanStatus;
+  mode: "exact" | "similar_allowed";
+  quantity: number;
+  maxBudgetMinor: number | null;
+  currency: string | null;
   selectedProductId: string | null;
   errorCode: string | null;
   errorMessage: string | null;
@@ -49,6 +53,8 @@ export interface ScanRecord {
       evidenceBasis: string;
     }>;
   } | null;
+  createdAt: string;
+  updatedAt: string;
   evidence?: Array<{
     id: string;
     evidence_type: string;

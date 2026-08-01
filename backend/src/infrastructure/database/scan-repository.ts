@@ -244,6 +244,19 @@ export async function getScanForUser(
   return mapScan(row);
 }
 
+export async function listScansForUser(
+  userId: string,
+  sql: Sql = getDatabase(),
+): Promise<ScanRecord[]> {
+  const rows = await sql`
+    select * from scans
+    where user_id = ${userId}
+    order by created_at desc
+    limit 100
+  `;
+  return rows.map(mapScan);
+}
+
 export async function getScan(
   scanId: string,
   sql: Sql = getDatabase(),

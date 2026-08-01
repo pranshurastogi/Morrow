@@ -6,6 +6,7 @@ import {
   approvePurchaseIntent,
   createPurchaseIntent,
   getPurchaseIntent,
+  listPurchaseIntents,
 } from "../../../modules/payments/payment-repository";
 import {
   startPaymentSession,
@@ -25,6 +26,10 @@ const createIntentSchema = z.object({
 });
 
 export const paymentRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/purchase-intents", async (request) => ({
+    purchaseIntents: await listPurchaseIntents(request.principal.userId),
+  }));
+
   app.post("/purchase-intents", async (request, reply) => {
     const body = createIntentSchema.parse(request.body);
     const intent = await createPurchaseIntent({

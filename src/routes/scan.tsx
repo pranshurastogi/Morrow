@@ -1,12 +1,6 @@
-import {
-  ClerkLoading,
-  Show,
-  SignInButton,
-  SignUpButton,
-} from "@clerk/tanstack-react-start";
+import { ClerkLoading, Show } from "@clerk/tanstack-react-start";
 import { createFileRoute } from "@tanstack/react-router";
-import { ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AuthenticationDesk } from "@/features/auth/authentication-desk";
 import { AuthorityPanel } from "@/features/scan/components/authority-panel";
 import { CapturePanel } from "@/features/scan/components/capture-panel";
 import {
@@ -71,48 +65,6 @@ function ScanPage() {
         <AuthenticatedScanDesk />
       </Show>
     </div>
-  );
-}
-
-function AuthenticationDesk() {
-  return (
-    <main className="mx-auto w-full max-w-[560px] px-4 py-5">
-      <section
-        className="ledger-card overflow-hidden"
-        aria-labelledby="sign-in-title"
-      >
-        <div className="border-b border-border bg-primary px-5 py-3 text-primary-foreground">
-          <p className="mono-caps">Private object desk</p>
-        </div>
-        <div className="px-5 py-7 text-center sm:px-8">
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-brass/60 bg-brass/10 text-primary">
-            <ShieldCheck className="h-6 w-6" aria-hidden />
-          </span>
-          <h1 id="sign-in-title" className="mt-4 font-display text-3xl">
-            Sign in before inspection
-          </h1>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            Your account keeps inspections, purchase limits, and dispatches
-            attached to you.
-          </p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <SignInButton mode="modal">
-              <Button size="lg" className="h-11 w-full">
-                Sign in
-              </Button>
-            </SignInButton>
-            <SignUpButton mode="modal">
-              <Button variant="outline" size="lg" className="h-11 w-full">
-                Create account
-              </Button>
-            </SignUpButton>
-          </div>
-          <p className="mono-caps mt-5 text-muted-foreground">
-            Purchase authority stays item, merchant, amount, and time bounded
-          </p>
-        </div>
-      </section>
-    </main>
   );
 }
 

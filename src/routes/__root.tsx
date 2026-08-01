@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { morrowClerkAppearance } from "@/features/auth/clerk-appearance";
 import { ClerkSessionBridge } from "@/features/auth/clerk-session-bridge";
 import appCss from "../styles.css?url";
 function NotFoundComponent() {
@@ -136,7 +137,11 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <ClerkProvider>
+        <ClerkProvider
+          appearance={morrowClerkAppearance}
+          signInFallbackRedirectUrl="/scan"
+          signUpFallbackRedirectUrl="/scan"
+        >
           <ClerkSessionBridge />
           {children}
         </ClerkProvider>

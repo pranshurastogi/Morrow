@@ -28,6 +28,8 @@ export interface PurchaseIntentRecord {
   expiresAt: string;
   productSnapshot: Record<string, unknown>;
   offerSnapshot: NormalizedOffer;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PaymentSessionRecord {
@@ -61,6 +63,8 @@ function mapIntent(row: Record<string, unknown>): PurchaseIntentRecord {
     expiresAt: new Date(String(row.expires_at)).toISOString(),
     productSnapshot: row.product_snapshot as Record<string, unknown>,
     offerSnapshot: normalizedOfferSchema.parse(row.offer_snapshot),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
   };
 }
 
@@ -221,6 +225,19 @@ export async function getPurchaseIntent(
       statusCode: 404,
     });
   return mapIntent(row);
+}
+
+export async function listPurchaseIntents(
+  userId: string,
+  sql: Sql = getDatabase(),
+): Promise<PurchaseIntentRecord[]> {
+  const rows = await sql`
+    select * from purchase_intents
+    where user_id = ${userId}
+    order by created_at desc
+    limit 100
+  `;
+  return rows.map(mapIntent);
 }
 
 export async function reserveIdempotencyKey(

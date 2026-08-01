@@ -1,5 +1,9 @@
-import { hasApiConfiguration, publicEnvironment } from "@/config/public-env";
-import { getAccessToken } from "@/features/auth/access-token";
+import {
+  ApiError,
+  apiAuthHeaders,
+  apiEndpoint,
+  apiRequest,
+} from "@/lib/morrow-api";
 import type {
   Candidate,
   EmbeddedPaymentSession,
@@ -8,72 +12,11 @@ import type {
   ScanRecord,
 } from "./types";
 
-export class ApiError extends Error {
-  readonly code: string;
-  readonly retryable: boolean;
-
-  constructor(input: { code: string; message: string; retryable?: boolean }) {
-    super(input.message);
-    this.name = "ApiError";
-    this.code = input.code;
-    this.retryable = input.retryable ?? false;
-  }
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const token = await getAccessToken();
-  if (token) return { Authorization: `Bearer ${token}` };
-  if (import.meta.env.DEV && publicEnvironment.developmentUserId) {
-    return {
-      "X-Morrow-User-Id": publicEnvironment.developmentUserId,
-      "X-Morrow-User-Email": publicEnvironment.developmentUserEmail,
-    };
-  }
-  return {};
-}
-
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  if (!hasApiConfiguration()) {
-    throw new ApiError({
-      code: "INTEGRATION_NOT_CONFIGURED",
-      message:
-        "Set VITE_API_BASE_URL to connect the Morrow inspection service.",
-    });
-  }
-  const response = await fetch(`${publicEnvironment.apiBaseUrl}/v1${path}`, {
-    ...init,
-    headers: {
-      ...(await authHeaders()),
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...init.headers,
-    },
-  });
-  const body = (await response.json().catch(() => null)) as
-    | T
-    | { error?: { code?: string; message?: string; retryable?: boolean } }
-    | null;
-  if (!response.ok) {
-    const providerError =
-      body && typeof body === "object" && "error" in body
-        ? body.error
-        : undefined;
-    throw new ApiError({
-      code: providerError?.code ?? "REQUEST_FAILED",
-      message:
-        providerError?.message ?? `Request failed with HTTP ${response.status}`,
-      ...(providerError?.retryable === undefined
-        ? {}
-        : { retryable: providerError.retryable }),
-    });
-  }
-  return body as T;
-}
-
 export async function uploadScanImage(
   file: File,
   purpose: "product_scan" | "additional_evidence",
 ): Promise<string> {
-  const presign = await request<{
+  const presign = await apiRequest<{
     uploadId: string;
     uploadUrl: string;
     maxBytes: number;
@@ -87,11 +30,21 @@ export async function uploadScanImage(
       message: "This image is larger than the upload limit.",
     });
   }
-  const upload = await fetch(presign.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type },
-    body: file,
-  });
+  let upload: Response;
+  try {
+    upload = await fetch(presign.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+  } catch {
+    throw new ApiError({
+      code: "UPLOAD_UNAVAILABLE",
+      message:
+        "The photograph could not reach Morrow's private image store. Please try again.",
+      retryable: true,
+    });
+  }
   if (!upload.ok)
     throw new ApiError({
       code: "UPLOAD_FAILED",
@@ -104,7 +57,7 @@ export async function createScanFromFile(
   file: File,
 ): Promise<{ scanId: string }> {
   const uploadId = await uploadScanImage(file, "product_scan");
-  return request("/scans", {
+  return apiRequest("/scans", {
     method: "POST",
     body: JSON.stringify({
       images: [{ uploadId, role: "primary" }],
@@ -124,27 +77,27 @@ export async function addEvidenceImage(
   role: "label" | "barcode",
 ) {
   const uploadId = await uploadScanImage(file, "additional_evidence");
-  return request(`/scans/${scanId}/images`, {
+  return apiRequest(`/scans/${scanId}/images`, {
     method: "POST",
     body: JSON.stringify({ images: [{ uploadId, role }] }),
   });
 }
 
 export function getScan(scanId: string): Promise<ScanRecord> {
-  return request(`/scans/${scanId}`);
+  return apiRequest(`/scans/${scanId}`);
 }
 
 export function getCandidates(
   scanId: string,
 ): Promise<{ candidates: Candidate[] }> {
-  return request(`/scans/${scanId}/candidates`);
+  return apiRequest(`/scans/${scanId}/candidates`);
 }
 
 export function getOffers(
   scanId: string,
   productId: string,
 ): Promise<{ offers: Offer[] }> {
-  return request(
+  return apiRequest(
     `/products/${productId}/offers?${new URLSearchParams({ scanId })}`,
   );
 }
@@ -154,18 +107,21 @@ export async function watchScan(
   signal: AbortSignal,
   onScan: (scan: ScanRecord) => void,
 ): Promise<void> {
-  if (!hasApiConfiguration())
-    throw new ApiError({
-      code: "INTEGRATION_NOT_CONFIGURED",
-      message: "The API is not configured.",
-    });
-  const response = await fetch(
-    `${publicEnvironment.apiBaseUrl}/v1/scans/${scanId}/events`,
-    {
-      headers: { ...(await authHeaders()), Accept: "text/event-stream" },
+  let response: Response;
+  try {
+    response = await fetch(apiEndpoint(`/scans/${scanId}/events`), {
+      headers: { ...(await apiAuthHeaders()), Accept: "text/event-stream" },
       signal,
-    },
-  );
+    });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    throw new ApiError({
+      code: "SERVICE_UNAVAILABLE",
+      message:
+        "The live inspection channel could not be reached. Please try again in a moment.",
+      retryable: true,
+    });
+  }
   if (!response.ok || !response.body)
     throw new ApiError({
       code: "EVENT_STREAM_FAILED",
@@ -198,20 +154,22 @@ export function createPurchaseIntent(input: {
   maximumAuthorizedTotalMinor: number;
   currency: string;
 }) {
-  return request<{ id: string }>("/purchase-intents", {
+  return apiRequest<{ id: string }>("/purchase-intents", {
     method: "POST",
     body: JSON.stringify({ ...input, quantity: 1 }),
   });
 }
 
 export function approvePurchaseIntent(intentId: string) {
-  return request(`/purchase-intents/${intentId}/approve`, { method: "POST" });
+  return apiRequest(`/purchase-intents/${intentId}/approve`, {
+    method: "POST",
+  });
 }
 
 export function createPaymentSession(
   intentId: string,
 ): Promise<EmbeddedPaymentSession> {
-  return request(`/purchase-intents/${intentId}/payment-session`, {
+  return apiRequest(`/purchase-intents/${intentId}/payment-session`, {
     method: "POST",
   });
 }
@@ -219,5 +177,7 @@ export function createPaymentSession(
 export function getPaymentStatus(
   paymentSessionId: string,
 ): Promise<PublicPaymentResult> {
-  return request(`/payments/${paymentSessionId}/status`);
+  return apiRequest(`/payments/${paymentSessionId}/status`);
 }
+
+export { ApiError };

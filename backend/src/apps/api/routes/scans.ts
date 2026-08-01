@@ -8,6 +8,7 @@ import {
   getEvidence,
   getScanForUser,
   getUploadsForUser,
+  listScansForUser,
   markUploadStored,
 } from "../../../infrastructure/database/scan-repository";
 import { enqueueScan } from "../../../infrastructure/queue/queues";
@@ -39,6 +40,10 @@ const createBodySchema = z.object({
 });
 
 export const scanRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/scans", async (request) => ({
+    scans: await listScansForUser(request.principal.userId),
+  }));
+
   app.post("/scans", async (request, reply) => {
     const parsed = createBodySchema.safeParse(request.body);
     if (!parsed.success) {
