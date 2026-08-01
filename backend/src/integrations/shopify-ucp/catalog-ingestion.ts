@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
-import type { Sql } from "postgres";
+import type { Sql, TransactionSql } from "postgres";
 import type { ProductObservation } from "../../domain/product-observation";
 import { getDatabase } from "../../infrastructure/database/client";
 import { normalizeText } from "../../modules/recognition/normalization";
-import { normalizeUcpVariant } from "./normalization";
+import {
+  normalizeUcpVariant,
+  type NormalizedUcpVariant,
+} from "./normalization";
 import type { UcpCatalogResult } from "./schemas";
 
 function merchantSlug(name: string, domain: string): string {
@@ -57,6 +60,91 @@ export function catalogIdentityKey(input: {
   return createHash("sha256").update(identity).digest("hex");
 }
 
+async function upsertCanonicalProduct(
+  sql: TransactionSql,
+  normalized: NormalizedUcpVariant,
+  identityKey: string,
+): Promise<string | null> {
+  // Multiple scans can discover the same item concurrently. Serialize only
+  // this semantic identity while reconciling source-specific catalogue rows.
+  await sql`
+    select pg_advisory_xact_lock(hashtextextended(${identityKey}, 0))
+  `;
+  const [identityRecord] = await sql`
+    select id
+    from canonical_products
+    where catalog_identity_key = ${identityKey}
+    for update
+  `;
+  const [sourceRecord] = await sql`
+    select id
+    from canonical_products
+    where source_provider = 'shopify_ucp'
+      and source_merchant_domain = ${normalized.merchantUcpDomain}
+      and source_variant_id = ${normalized.externalVariantId}
+    for update
+  `;
+
+  const targetId = identityRecord?.id ?? sourceRecord?.id;
+  if (!targetId) {
+    const [inserted] = await sql`
+      insert into canonical_products (
+        category, brand, name, variant, size_value, size_unit, gtin, upc,
+        ean, mpn, model_number, attributes, source_provider,
+        source_product_id, source_variant_id, source_merchant_domain,
+        catalog_identity_key, catalog_refreshed_at
+      ) values (
+        ${normalized.category}, ${normalized.brand}, ${normalized.name},
+        ${normalized.variant}, ${normalized.size?.value ?? null},
+        ${normalized.size?.unit ?? null}, ${normalized.gtin}, ${normalized.upc},
+        ${normalized.ean}, ${normalized.mpn}, ${normalized.modelNumber},
+        ${sql.json(normalized.attributes)}, 'shopify_ucp',
+        ${normalized.externalProductId}, ${normalized.externalVariantId},
+        ${normalized.merchantUcpDomain}, ${identityKey}, now()
+      )
+      returning id
+    `;
+    return inserted ? String(inserted.id) : null;
+  }
+
+  if (
+    identityRecord &&
+    sourceRecord &&
+    String(identityRecord.id) !== String(sourceRecord.id)
+  ) {
+    // Keep the established semantic record stable for scan/audit references.
+    // The source row remains as provenance, while its sellable listing is
+    // re-linked to the semantic record below.
+    await sql`
+      update canonical_products
+      set catalog_identity_key = null
+      where id = ${sourceRecord.id}
+    `;
+  }
+
+  const [updated] = await sql`
+    update canonical_products
+    set
+      category = ${normalized.category},
+      brand = coalesce(${normalized.brand}, brand),
+      name = ${normalized.name},
+      variant = ${normalized.variant},
+      size_value = ${normalized.size?.value ?? null},
+      size_unit = ${normalized.size?.unit ?? null},
+      gtin = coalesce(${normalized.gtin}, gtin),
+      upc = coalesce(${normalized.upc}, upc),
+      ean = coalesce(${normalized.ean}, ean),
+      mpn = coalesce(${normalized.mpn}, mpn),
+      model_number = coalesce(${normalized.modelNumber}, model_number),
+      attributes = attributes || ${sql.json(normalized.attributes)},
+      catalog_identity_key = ${identityKey},
+      catalog_refreshed_at = now()
+    where id = ${targetId}
+    returning id
+  `;
+  return updated ? String(updated.id) : null;
+}
+
 export async function ingestUcpCatalog(input: {
   results: UcpCatalogResult[];
   observation: ProductObservation;
@@ -106,40 +194,12 @@ export async function ingestUcpCatalog(input: {
             returning id
           `;
           if (!merchant) continue;
-          const [canonical] = await transaction`
-            insert into canonical_products (
-              category, brand, name, variant, size_value, size_unit, gtin, upc,
-              ean, mpn, model_number, attributes, source_provider,
-              source_product_id, source_variant_id, source_merchant_domain,
-              catalog_identity_key, catalog_refreshed_at
-            ) values (
-              ${normalized.category}, ${normalized.brand}, ${normalized.name},
-              ${normalized.variant}, ${normalized.size?.value ?? null},
-              ${normalized.size?.unit ?? null}, ${normalized.gtin}, ${normalized.upc},
-              ${normalized.ean}, ${normalized.mpn}, ${normalized.modelNumber},
-              ${transaction.json(normalized.attributes)}, 'shopify_ucp',
-              ${normalized.externalProductId}, ${normalized.externalVariantId},
-              ${normalized.merchantUcpDomain}, ${identityKey}, now()
-            ) on conflict (catalog_identity_key)
-              where catalog_identity_key is not null
-            do update set
-              category = excluded.category,
-              brand = coalesce(excluded.brand, canonical_products.brand),
-              name = excluded.name,
-              variant = excluded.variant,
-              size_value = excluded.size_value,
-              size_unit = excluded.size_unit,
-              gtin = coalesce(excluded.gtin, canonical_products.gtin),
-              upc = coalesce(excluded.upc, canonical_products.upc),
-              ean = coalesce(excluded.ean, canonical_products.ean),
-              mpn = coalesce(excluded.mpn, canonical_products.mpn),
-              model_number = coalesce(excluded.model_number, canonical_products.model_number),
-              attributes = canonical_products.attributes || excluded.attributes,
-              catalog_refreshed_at = now()
-            returning id
-          `;
-          if (!canonical) continue;
-          const canonicalId = String(canonical.id);
+          const canonicalId = await upsertCanonicalProduct(
+            transaction,
+            normalized,
+            identityKey,
+          );
+          if (!canonicalId) continue;
           productIds.push(canonicalId);
           if (normalized.imageUrl) {
             await transaction`
