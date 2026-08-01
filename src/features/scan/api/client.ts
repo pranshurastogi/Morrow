@@ -102,6 +102,65 @@ export function getOffers(
   );
 }
 
+const settledScanStatuses = new Set<ScanRecord["status"]>([
+  "REQUIRES_MORE_EVIDENCE",
+  "SIMILAR_FOUND",
+  "AMBIGUOUS",
+  "OFFERS_READY",
+  "ORDER_COMPLETED",
+  "CHECKOUT_FAILED",
+]);
+
+export function isSettledScan(scan: ScanRecord): boolean {
+  return (
+    settledScanStatuses.has(scan.status) ||
+    (scan.errorCode !== null && scan.status !== "OFFERS_READY")
+  );
+}
+
+function waitForNextPoll(signal: AbortSignal, milliseconds = 1_500) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function pollScan(
+  scanId: string,
+  signal: AbortSignal,
+  onScan: (scan: ScanRecord) => void,
+): Promise<void> {
+  let lastVersion = "";
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (signal.aborted)
+      throw signal.reason ?? new DOMException("Aborted", "AbortError");
+    const scan = await getScan(scanId);
+    const version = `${scan.updatedAt}:${scan.status}:${scan.errorCode ?? ""}`;
+    if (version !== lastVersion) {
+      onScan(scan);
+      lastVersion = version;
+    }
+    if (isSettledScan(scan)) return;
+    await waitForNextPoll(signal);
+  }
+  throw new ApiError({
+    code: "INSPECTION_TIMEOUT",
+    message: "The inspection is taking longer than expected.",
+    retryable: true,
+  });
+}
+
 export async function watchScan(
   scanId: string,
   signal: AbortSignal,
@@ -115,21 +174,15 @@ export async function watchScan(
     });
   } catch (error) {
     if (signal.aborted) throw error;
-    throw new ApiError({
-      code: "SERVICE_UNAVAILABLE",
-      message:
-        "The live inspection channel could not be reached. Please try again in a moment.",
-      retryable: true,
-    });
+    return pollScan(scanId, signal, onScan);
   }
-  if (!response.ok || !response.body)
-    throw new ApiError({
-      code: "EVENT_STREAM_FAILED",
-      message: "Live scan updates are unavailable.",
-    });
+  if (!response.ok || !response.body) {
+    return pollScan(scanId, signal, onScan);
+  }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let latestScan: ScanRecord | null = null;
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -142,9 +195,14 @@ export async function watchScan(
         .filter((line) => line.startsWith("data: "))
         .map((line) => line.slice(6))
         .join("\n");
-      if (data) onScan(JSON.parse(data) as ScanRecord);
+      if (data) {
+        latestScan = JSON.parse(data) as ScanRecord;
+        onScan(latestScan);
+      }
     }
   }
+  if (latestScan && isSettledScan(latestScan)) return;
+  return pollScan(scanId, signal, onScan);
 }
 
 export function createPurchaseIntent(input: {

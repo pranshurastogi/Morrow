@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { MorrowError } from "../../../common/errors";
-import { getEnvironment } from "../../../config/env";
+import { frontendOrigins, getEnvironment } from "../../../config/env";
 import {
   createScan,
   addScanImages,
@@ -14,6 +14,7 @@ import {
 import { enqueueScan } from "../../../infrastructure/queue/queues";
 import { assertStoredObject } from "../../../infrastructure/storage/r2";
 import { listCandidatesForUser } from "../../../modules/catalog/catalog-repository";
+import { eventStreamHeaders } from "../event-stream";
 
 const idParamsSchema = z.object({ scanId: z.uuid() });
 const createBodySchema = z.object({
@@ -190,12 +191,15 @@ export const scanRoutes: FastifyPluginAsync = async (app) => {
     const params = idParamsSchema.parse(request.params);
     await getScanForUser(params.scanId, request.principal.userId);
     reply.hijack();
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
+    reply.raw.writeHead(
+      200,
+      eventStreamHeaders({
+        ...(typeof request.headers.origin === "string"
+          ? { origin: request.headers.origin }
+          : {}),
+        allowedOrigins: frontendOrigins(),
+      }),
+    );
     let open = true;
     let version = -1;
     request.raw.once("close", () => {
