@@ -103,7 +103,7 @@ export const ucpSearchResponseSchema = z
   })
   .passthrough();
 
-const cartStructuredContentSchema = z
+const cartSchema = z
   .object({
     id: z.string().min(1),
     currency: z.string().length(3),
@@ -121,6 +121,17 @@ const cartStructuredContentSchema = z
     messages: z.array(z.unknown()).default([]),
   })
   .passthrough();
+
+// Deployed Shopify storefronts currently return the cart directly in
+// structuredContent. The published Cart MCP contract wraps it in `{ cart }`.
+// Normalize both envelopes so a merchant rollout cannot break quote creation.
+const cartStructuredContentSchema = z.union([
+  cartSchema,
+  z
+    .object({ cart: cartSchema })
+    .passthrough()
+    .transform((content) => content.cart),
+]);
 
 export const ucpCartResponseSchema = z
   .object({

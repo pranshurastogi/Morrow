@@ -152,11 +152,10 @@ export function normalizeUcpVariant(input: {
 }): NormalizedUcpVariant {
   const { product, variant, observation, sourceEndpoint } = input;
   const meaningfulOptions = variant.options.filter(
-    (option) =>
-      !(
-        normalizeText(option.name) === "title" &&
-        normalizeText(option.label) === "default title"
-      ),
+    // Shopify uses `Title` as the synthetic option for single-variant
+    // products. It is not a real variant dimension and must not split the same
+    // product between Global Catalog and a merchant storefront.
+    (option) => normalizeText(option.name) !== "title",
   );
   const optionText = meaningfulOptions
     .map((option) => `${option.name}: ${option.label}`)

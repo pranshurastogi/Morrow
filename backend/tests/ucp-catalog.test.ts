@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import type { ProductObservation } from "../src/domain/product-observation";
 import { buildCatalogQuery } from "../src/integrations/shopify-ucp/discovery";
+import { catalogIdentityKey } from "../src/integrations/shopify-ucp/catalog-ingestion";
 import {
   normalizeUcpVariant,
   parseCatalogSize,
 } from "../src/integrations/shopify-ucp/normalization";
-import { ucpProductSchema } from "../src/integrations/shopify-ucp/schemas";
+import {
+  ucpCartResponseSchema,
+  ucpProductSchema,
+} from "../src/integrations/shopify-ucp/schemas";
 import { assertAllowedUcpEndpoint } from "../src/integrations/shopify-ucp/client";
 
 const observation: ProductObservation = {
@@ -113,6 +117,67 @@ describe("Shopify UCP catalogue normalization", () => {
     expect(normalized.size).toEqual({ value: 150, unit: "ml" });
     expect(normalized.title).toBe(product.title);
     expect(normalized.variant).toBeNull();
+  });
+
+  test("reconciles a brand-prefixed global result with the sellable storefront variant", () => {
+    const globalKey = catalogIdentityKey({
+      brand: "mamaearth",
+      name: "Mamaearth Rice Dewy Bright Face Wash - 200 ml",
+      size: { value: 200, unit: "ml" },
+      gtin: null,
+      variant: "Title: Mamaearth Rice Dewy Bright Face Wash - 200 ml",
+      merchantDomain: "catalog.shopify.com",
+      attributes: {
+        option_title: "Mamaearth Rice Dewy Bright Face Wash - 200 ml",
+      },
+    });
+    const storefrontKey = catalogIdentityKey({
+      brand: "Mamaearth",
+      name: "Rice Dewy Bright Face Wash - 200 ml",
+      size: { value: 200, unit: "ml" },
+      gtin: null,
+      variant: null,
+      merchantDomain: "mamaearthprod.myshopify.com",
+      attributes: {},
+    });
+    const wrongSizeKey = catalogIdentityKey({
+      brand: "Mamaearth",
+      name: "Rice Dewy Bright Face Wash - 150 ml",
+      size: { value: 150, unit: "ml" },
+      gtin: null,
+      variant: null,
+      merchantDomain: "mamaearthprod.myshopify.com",
+      attributes: {},
+    });
+
+    expect(globalKey).toBe(storefrontKey);
+    expect(globalKey).not.toBe(wrongSizeKey);
+  });
+
+  test("normalizes both deployed and documented Cart MCP envelopes", () => {
+    const cart = {
+      id: "gid://shopify/Cart/cart_123",
+      currency: "INR",
+      totals: [
+        { type: "subtotal", amount: 54900 },
+        { type: "total", amount: 54900 },
+      ],
+      continue_url: "https://mamaearth.in/cart/c/cart_123",
+      messages: [],
+    };
+    const response = (structuredContent: unknown) => ({
+      jsonrpc: "2.0" as const,
+      id: "quote",
+      result: { structuredContent },
+    });
+
+    expect(
+      ucpCartResponseSchema.parse(response(cart)).result?.structuredContent.id,
+    ).toBe(cart.id);
+    expect(
+      ucpCartResponseSchema.parse(response({ cart })).result?.structuredContent
+        .id,
+    ).toBe(cart.id);
   });
 
   test("rejects a catalogue endpoint that could become an SSRF target", () => {

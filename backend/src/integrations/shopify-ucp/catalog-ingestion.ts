@@ -21,10 +21,25 @@ export function catalogIdentityKey(input: {
   merchantDomain: string;
   attributes: Record<string, string>;
 }): string {
+  const normalizedBrand = normalizeText(input.brand ?? "");
+  let normalizedName = normalizeText(input.name);
+  // Global Catalog commonly prefixes the maker while the merchant storefront
+  // exposes the same title without it. The maker remains a separate identity
+  // dimension, so removing only a leading duplicate is deterministic and does
+  // not merge products across brands.
+  if (
+    normalizedBrand &&
+    (normalizedName === normalizedBrand ||
+      normalizedName.startsWith(`${normalizedBrand} `))
+  ) {
+    normalizedName = normalizedName.slice(normalizedBrand.length).trim();
+  }
   const variantOptions = Object.entries(input.attributes)
     .filter(
       ([key]) =>
-        key.startsWith("option_") && !/(size|volume|weight|capacity)/.test(key),
+        key.startsWith("option_") &&
+        key !== "option_title" &&
+        !/(size|volume|weight|capacity)/.test(key),
     )
     .map(([key, value]) => `${key}:${normalizeText(value)}`)
     .sort();
@@ -32,7 +47,7 @@ export function catalogIdentityKey(input: {
     ? `gtin:${input.gtin}`
     : [
         normalizeText(input.brand ?? input.merchantDomain),
-        normalizeText(input.name),
+        normalizedName,
         input.size ? `${input.size.value}:${input.size.unit}` : "size:unknown",
         ...variantOptions,
         ...(!input.size && variantOptions.length === 0 && input.variant
