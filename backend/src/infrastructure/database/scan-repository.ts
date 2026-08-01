@@ -322,8 +322,8 @@ export async function transitionScan(
         observation = coalesce(${patch.observation ? transaction.json(databaseJson(patch.observation)) : null}, observation),
         next_capture = ${patch.nextCapture === undefined ? current.next_capture : transaction.json(databaseJson(patch.nextCapture))},
         selected_product_id = ${patch.selectedProductId === undefined ? current.selected_product_id : patch.selectedProductId},
-        error_code = ${patch.errorCode === undefined ? current.error_code : patch.errorCode},
-        error_message = ${patch.errorMessage === undefined ? current.error_message : patch.errorMessage},
+        error_code = ${patch.errorCode ?? null},
+        error_message = ${patch.errorMessage ?? null},
         version = version + 1
       where id = ${scanId} and version = ${current.version}
       returning *
