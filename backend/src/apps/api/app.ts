@@ -81,28 +81,31 @@ export async function createApp() {
   await app.register(paymentRoutes, { prefix: "/v1" });
   await app.register(orderRoutes, { prefix: "/v1" });
 
-  app.get("/.well-known/ucp", async () => ({
-    ucp: {
-      version: "2026-04-08",
-      services: {
-        "dev.ucp.shopping": [
-          {
-            version: "2026-04-08",
-            spec: "https://ucp.dev/2026-04-08/specification/overview",
-            transport: "mcp",
-            schema:
-              "https://ucp.dev/2026-04-08/services/shopping/mcp.openrpc.json",
-          },
-        ],
+  app.get("/.well-known/ucp", async (_request, reply) => {
+    reply.header("Cache-Control", "public, max-age=3600");
+    return {
+      ucp: {
+        version: "2026-04-08",
+        services: {
+          "dev.ucp.shopping": [
+            {
+              version: "2026-04-08",
+              spec: "https://ucp.dev/2026-04-08/specification/overview",
+              transport: "mcp",
+              schema:
+                "https://ucp.dev/2026-04-08/services/shopping/mcp.openrpc.json",
+            },
+          ],
+        },
+        capabilities: {
+          "dev.ucp.shopping.catalog.search": [{ version: "2026-04-08" }],
+          "dev.ucp.shopping.catalog.lookup": [{ version: "2026-04-08" }],
+          "dev.ucp.shopping.cart": [{ version: "2026-04-08" }],
+          "dev.ucp.shopping.checkout": [{ version: "2026-04-08" }],
+        },
       },
-      capabilities: {
-        "dev.ucp.shopping.catalog.search": [{ version: "2026-04-08" }],
-        "dev.ucp.shopping.catalog.lookup": [{ version: "2026-04-08" }],
-        "dev.ucp.shopping.cart": [{ version: "2026-04-08" }],
-        "dev.ucp.shopping.checkout": [{ version: "2026-04-08" }],
-      },
-    },
-  }));
+    };
+  });
 
   app.get("/health", async () => ({ status: "ok", service: "morrow-api" }));
   app.get("/ready", async (_request, reply) => {

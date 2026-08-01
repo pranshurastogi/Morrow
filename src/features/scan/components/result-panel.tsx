@@ -276,6 +276,8 @@ export function AmbiguousPanel({
                 <img
                   src={candidate.image_url}
                   alt=""
+                  width={80}
+                  height={80}
                   className="h-20 w-20 shrink-0 border border-border bg-ivory object-contain p-1"
                 />
               ) : null}
@@ -291,9 +293,11 @@ export function AmbiguousPanel({
                     </h2>
                   </div>
                   <StatusStamp tone="similar">
-                    {candidate.classification === "likely_exact"
-                      ? "Likely"
-                      : "Alternative"}
+                    {candidate.classification === "exact_verified"
+                      ? "Exact evidence"
+                      : candidate.classification === "likely_exact"
+                        ? "Likely"
+                        : "Alternative"}
                   </StatusStamp>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">

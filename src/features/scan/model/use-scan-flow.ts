@@ -201,6 +201,7 @@ export function useScanFlow() {
     const candidates = response.candidates
       .filter(
         (candidate) =>
+          candidate.classification === "exact_verified" ||
           candidate.classification === "likely_exact" ||
           candidate.classification === "similar",
       )
