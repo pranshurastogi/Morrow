@@ -1,0 +1,220 @@
+.route-document {
+  min-height: 100vh;
+  animation: paper-route-in 700ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+}
+
+.route-document::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, var(--ivory), var(--parchment) 86%),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 7px,
+      oklch(0.229 0.008 67.5 / 0.04) 7px 8px
+    );
+  border-bottom: 2px double var(--brass);
+  animation: paper-shutter 620ms cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+
+.site-header {
+  background-image: linear-gradient(
+    90deg,
+    oklch(0.972 0.019 88.5 / 0.3),
+    transparent 18%,
+    transparent 82%,
+    oklch(0.972 0.019 88.5 / 0.3)
+  );
+  box-shadow: 0 8px 22px -21px var(--ink);
+}
+
+.brand-seal {
+  box-shadow:
+    inset 0 0 0 2px var(--parchment),
+    0 2px 8px -5px var(--ink);
+  transition:
+    transform 520ms cubic-bezier(0.16, 0.82, 0.22, 1),
+    box-shadow 520ms ease;
+}
+
+.brand-lockup:hover .brand-seal {
+  transform: rotate(-7deg) scale(1.04);
+  box-shadow:
+    inset 0 0 0 2px var(--parchment),
+    0 5px 12px -7px var(--ink);
+}
+
+.header-index-link {
+  position: relative;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease;
+}
+
+.header-index-link::after {
+  content: "";
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.3rem;
+  left: 0.75rem;
+  height: 1px;
+  background: var(--brass);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 240ms cubic-bezier(0.16, 0.82, 0.22, 1);
+}
+
+.header-index-link:hover {
+  color: var(--foreground);
+  background: oklch(0.972 0.019 88.5 / 0.55);
+}
+
+.header-index-link:hover::after {
+  transform: scaleX(1);
+}
+
+.morrow-invite {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid oklch(0.63 0.077 74.6 / 0.75);
+  animation: invite-pulse 3.8s ease-in-out infinite;
+}
+
+.morrow-invite::before {
+  content: "";
+  position: absolute;
+  inset: -25% auto -25% -20%;
+  z-index: 0;
+  width: 22%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(0.972 0.019 88.5 / 0.48),
+    transparent
+  );
+  animation: invite-beam 4.2s ease-in-out infinite;
+}
+
+.morrow-invite > * {
+  position: relative;
+  z-index: 1;
+}
+
+.morrow-invite-scan {
+  animation: invite-scan 1.9s ease-in-out infinite;
+}
+
+.hero-copy > * {
+  animation: compose-in 620ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+}
+
+.hero-copy > :nth-child(2) {
+  animation-delay: 70ms;
+}
+.hero-copy > :nth-child(3) {
+  animation-delay: 130ms;
+}
+.hero-copy > :nth-child(4) {
+  animation-delay: 190ms;
+}
+.hero-copy > :nth-child(5) {
+  animation-delay: 250ms;
+}
+
+.hero-plate {
+  animation: compose-in 760ms 160ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+}
+
+.hero-plate img {
+  transition:
+    transform 1.2s cubic-bezier(0.16, 0.82, 0.22, 1),
+    filter 1.2s ease;
+}
+
+@media (hover: hover) {
+  .hero-plate:hover img {
+    transform: scale(1.018);
+    filter: sepia(0.08) contrast(1.025);
+  }
+}
+
+.receipt-enter {
+  position: relative;
+  animation: receipt-feed 650ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+}
+
+.receipt-enter::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--brass), transparent);
+  animation: brass-rule-pass 760ms 80ms ease-out both;
+}
+
+.machine-window {
+  position: relative;
+}
+
+.machine-window::after {
+  content: "";
+  position: absolute;
+  inset: 2.25rem 0 auto;
+  z-index: 3;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 5%,
+    var(--brass),
+    transparent 95%
+  );
+  animation: inspection-line 3.2s ease-in-out infinite;
+}
+
+.catalogue-preview-inner {
+  animation: catalogue-develop 620ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+}
+
+.catalogue-preview-image {
+  transition:
+    transform 900ms cubic-bezier(0.16, 0.82, 0.22, 1),
+    filter 900ms ease;
+}
+
+.sample-object-tab:hover {
+  transform: translateY(-1px);
+}
+
+.sample-object-tab:active {
+  transform: translateY(1px);
+}
+
+@media (hover: hover) {
+  .catalogue-preview:hover .catalogue-preview-image {
+    transform: scale(1.018);
+    filter: sepia(0.06) contrast(1.02);
+  }
+}
+
+.mechanical-button {
+  box-shadow:
+    inset 0 -2px 0 oklch(0.229 0.008 67.5 / 0.22),
+    0 1px 0 oklch(0.972 0.019 88.5 / 0.8);
+}
+
+.mechanical-button:hover {
+  transform: translateY(-1px);
+}
+
+.mechanical-button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px oklch(0.229 0.008 67.5 / 0.28);
+}

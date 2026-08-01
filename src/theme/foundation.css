@@ -1,0 +1,87 @@
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+    background-image:
+      linear-gradient(oklch(0.229 0.008 67.5 / 0.018) 1px, transparent 1px),
+      radial-gradient(
+        oklch(0.229 0.008 67.5 / 0.045) 0.45px,
+        transparent 0.55px
+      );
+    background-size:
+      100% 24px,
+      4px 4px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.015em;
+  }
+
+  ::selection {
+    background: var(--brass);
+    color: var(--brass-foreground);
+  }
+}
+
+@utility surface-grain {
+  position: relative;
+  isolation: isolate;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.5;
+    background-image: radial-gradient(
+      oklch(0.229 0.008 67.5 / 0.055) 0.5px,
+      transparent 0.5px
+    );
+    background-size: 4px 4px;
+  }
+}
+
+@utility plate {
+  border: 1px solid var(--border);
+  box-shadow:
+    0 0 0 1px var(--ivory) inset,
+    var(--shadow-plate);
+}
+
+@utility rule-tick {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--border) 0 1px,
+    transparent 1px 8px
+  );
+}
+
+@utility label-caps {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+@utility mono-caps {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.6875rem;
+}
+
+@utility era-gradient {
+  background: var(--gradient-era);
+}

@@ -1,0 +1,106 @@
+@custom-variant dark (&:is(.dark *));
+
+/* Morrow Mercantile Co.: parchment, ink, bottle green, brass, postal red. */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-brass: var(--brass);
+  --color-brass-foreground: var(--brass-foreground);
+  --color-postal: var(--postal);
+  --color-postal-foreground: var(--postal-foreground);
+  --color-faded-blue: var(--faded-blue);
+  --color-olive: var(--olive);
+  --color-parchment: var(--parchment);
+  --color-ivory: var(--ivory);
+  --color-ink: var(--ink);
+}
+
+:root {
+  --radius: 0.25rem;
+  --parchment: oklch(0.936 0.033 87.3);
+  --ivory: oklch(0.972 0.019 88.5);
+  --ink: oklch(0.229 0.008 67.5);
+  --background: var(--parchment);
+  --foreground: var(--ink);
+  --card: var(--ivory);
+  --card-foreground: var(--ink);
+  --popover: var(--ivory);
+  --popover-foreground: var(--ink);
+  --primary: oklch(0.371 0.048 162.4);
+  --primary-foreground: oklch(0.972 0.019 88.5);
+  --secondary: oklch(0.895 0.031 87);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.905 0.028 87);
+  --muted-foreground: oklch(0.462 0.021 76);
+  --accent: oklch(0.63 0.077 74.6);
+  --accent-foreground: oklch(0.972 0.019 88.5);
+  --brass: oklch(0.63 0.077 74.6);
+  --brass-foreground: oklch(0.972 0.019 88.5);
+  --postal: oklch(0.49 0.121 30.5);
+  --postal-foreground: oklch(0.972 0.019 88.5);
+  --faded-blue: oklch(0.556 0.032 220.6);
+  --olive: oklch(0.539 0.036 111);
+  --destructive: oklch(0.49 0.121 30.5);
+  --destructive-foreground: oklch(0.972 0.019 88.5);
+  --border: oklch(0.82 0.031 82);
+  --input: oklch(0.78 0.033 82);
+  --ring: oklch(0.371 0.048 162.4);
+  --shadow-plate:
+    0 1px 0 0 oklch(0.229 0.008 67.5 / 0.16),
+    0 12px 28px -18px oklch(0.229 0.008 67.5 / 0.5);
+  --shadow-press: inset 0 -2px 0 0 oklch(0.229 0.008 67.5 / 0.28);
+  --gradient-era: linear-gradient(
+    180deg,
+    oklch(0.9 0.035 84) 0%,
+    var(--parchment) 45%,
+    var(--ivory) 100%
+  );
+}
+
+.dark {
+  --parchment: oklch(0.212 0.012 70);
+  --ivory: oklch(0.262 0.014 72);
+  --ink: oklch(0.945 0.022 88);
+  --background: var(--parchment);
+  --foreground: var(--ink);
+  --card: var(--ivory);
+  --card-foreground: var(--ink);
+  --popover: var(--ivory);
+  --popover-foreground: var(--ink);
+  --primary: oklch(0.58 0.065 162);
+  --primary-foreground: oklch(0.17 0.01 70);
+  --secondary: oklch(0.3 0.015 72);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.3 0.015 72);
+  --muted-foreground: oklch(0.72 0.02 80);
+  --border: oklch(0.4 0.02 78);
+  --input: oklch(0.42 0.02 78);
+}

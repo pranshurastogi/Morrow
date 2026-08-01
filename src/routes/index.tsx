@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SiteNav } from "@/components/morrow/site-nav";
-import { Hero, EraTransform, LiveDemo } from "@/components/morrow/hero-sections";
 import {
-  SimilarNotEnough,
-  PurchaseAuthority,
-  UseCases,
-  PravaInfrastructure,
+  EraTransform,
   FinalCta,
+  Hero,
+  LiveDemo,
+  PravaInfrastructure,
+  PurchaseAuthority,
+  SimilarNotEnough,
   SiteFooter,
-} from "@/components/morrow/story-sections";
+  UseCases,
+} from "@/components/morrow/landing";
 
 const title = "Morrow — The buy button for the physical world";
 const description =
@@ -25,7 +27,10 @@ export const Route = createFileRoute("/")({
       { property: "og:image", content: "/og.png" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
-      { property: "og:image:alt", content: "Morrow — Show it. Verify it. Get it." },
+      {
+        property: "og:image:alt",
+        content: "Morrow — Show it. Verify it. Get it.",
+      },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: "/og.png" },
     ],

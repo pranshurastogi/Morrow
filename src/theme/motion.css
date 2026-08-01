@@ -1,0 +1,221 @@
+@keyframes stamp-press {
+  0% {
+    opacity: 0;
+    transform: rotate(-14deg) scale(1.9);
+  }
+  55% {
+    opacity: 1;
+    transform: rotate(-7deg) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-7deg) scale(1);
+  }
+}
+
+@keyframes dial-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slip-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ticker {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes paper-route-in {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scaleY(0.992);
+    filter: sepia(0.22) contrast(0.94);
+  }
+  48% {
+    opacity: 1;
+  }
+  72% {
+    transform: translateY(-2px) scaleY(1.001);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    filter: none;
+  }
+}
+
+@keyframes paper-shutter {
+  0%,
+  36% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+  100% {
+    opacity: 0;
+    clip-path: inset(100% 0 0 0);
+  }
+}
+
+@keyframes receipt-feed {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-12px);
+  }
+  62% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes brass-rule-pass {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scaleX(0.25);
+  }
+  24% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(28rem) scaleX(1);
+  }
+}
+
+@keyframes compose-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes inspection-line {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  15%,
+  70% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(22rem);
+  }
+}
+
+@keyframes invite-beam {
+  0%,
+  68% {
+    transform: translateX(-230%) skewX(-18deg);
+    opacity: 0;
+  }
+  72% {
+    opacity: 0.72;
+  }
+  88%,
+  100% {
+    transform: translateX(520%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+@keyframes invite-scan {
+  0%,
+  100% {
+    transform: translateX(0);
+    opacity: 0.82;
+  }
+  48% {
+    transform: translateX(2px);
+    opacity: 1;
+  }
+  52% {
+    transform: translateX(-1px);
+  }
+}
+
+@keyframes invite-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 -2px 0 oklch(0.229 0.008 67.5 / 0.28),
+      0 3px 10px -7px oklch(0.371 0.048 162.4 / 0.8),
+      0 0 0 0 oklch(0.63 0.077 74.6 / 0);
+  }
+  50% {
+    box-shadow:
+      inset 0 -2px 0 oklch(0.229 0.008 67.5 / 0.28),
+      0 5px 15px -8px oklch(0.371 0.048 162.4 / 0.95),
+      0 0 0 3px oklch(0.63 0.077 74.6 / 0.14);
+  }
+}
+
+@keyframes catalogue-develop {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    filter: sepia(0.7) contrast(0.8);
+  }
+  68% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    filter: sepia(0.12) contrast(0.96);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    filter: none;
+  }
+}
+
+@utility animate-stamp {
+  animation: stamp-press 0.6s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+@utility animate-dial {
+  animation: dial-turn 3.4s linear infinite;
+}
+
+@utility animate-slip {
+  animation: slip-in 0.45s ease-out both;
+}
+
+@utility animate-ticker {
+  animation: ticker 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
