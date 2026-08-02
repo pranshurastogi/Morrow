@@ -477,6 +477,29 @@ export async function processScan(scanId: string): Promise<void> {
         continue;
       }
       if (scan.status === "EXACT_VERIFIED") {
+        if (scan.initiationSource === "archive_repeat" && scan.observation) {
+          const refreshed = await discoverProductCandidates({
+            observation: scan.observation,
+            userId: scan.userId,
+            countryCode: scan.countryCode ?? "IN",
+            currency: scan.currency ?? "INR",
+          });
+          await writeAuditEvent({
+            userId: scan.userId,
+            entityType: "scan",
+            entityId: scan.id,
+            eventType: "ARCHIVE_REPEAT_CATALOG_REFRESHED",
+            actorType: "provider",
+            payload: {
+              sourceScanId: scan.sourceScanId,
+              discoveredProductCount:
+                refreshed.liveCatalog?.productCount ??
+                refreshed.discoveredProductIds.length,
+              candidateCount: refreshed.candidates.length,
+              liveCatalogAvailable: Boolean(refreshed.liveCatalog),
+            },
+          });
+        }
         await transitionScan(scanId, "SEARCHING_MERCHANTS");
         continue;
       }

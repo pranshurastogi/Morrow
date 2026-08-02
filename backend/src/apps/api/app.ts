@@ -15,6 +15,7 @@ import { checkRedis } from "../../infrastructure/queue/connection";
 import { captureOperationalError } from "../../infrastructure/observability";
 import { authPlugin } from "./plugins/auth";
 import { accountRoutes } from "./routes/account";
+import { archiveRoutes } from "./routes/archive";
 import { offerRoutes } from "./routes/offers";
 import { orderRoutes } from "./routes/orders";
 import { paymentRoutes } from "./routes/payments";
@@ -77,6 +78,7 @@ export async function createApp() {
   }
   await app.register(authPlugin);
   await app.register(accountRoutes, { prefix: "/v1" });
+  await app.register(archiveRoutes, { prefix: "/v1" });
   await app.register(uploadRoutes, { prefix: "/v1" });
   await app.register(scanRoutes, { prefix: "/v1" });
   await app.register(offerRoutes, { prefix: "/v1" });

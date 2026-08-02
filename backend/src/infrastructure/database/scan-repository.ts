@@ -15,6 +15,8 @@ import { assertCandidateMayBeConfirmed } from "../../modules/matching/confirmati
 export interface ScanRecord {
   id: string;
   userId: string;
+  sourceScanId: string | null;
+  initiationSource: "capture" | "archive_repeat";
   status: ScanStatus;
   mode: "exact" | "similar_allowed";
   quantity: number;
@@ -45,6 +47,12 @@ function mapScan(row: Record<string, unknown>): ScanRecord {
   return {
     id: String(row.id),
     userId: String(row.user_id),
+    sourceScanId:
+      row.source_scan_id === null || row.source_scan_id === undefined
+        ? null
+        : String(row.source_scan_id),
+    initiationSource:
+      row.initiation_source === "archive_repeat" ? "archive_repeat" : "capture",
     status: row.status as ScanStatus,
     mode: row.mode as ScanRecord["mode"],
     quantity: Number(row.quantity),
