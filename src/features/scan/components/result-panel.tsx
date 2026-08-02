@@ -249,10 +249,14 @@ export function ResultPanel({
                 aria-hidden
               />
               <div>
-                <p className="font-medium">No purchasable exact offer yet</p>
+                <p className="font-medium">
+                  {exact
+                    ? "No exact connected dispatch yet"
+                    : "No connected dispatch for this choice yet"}
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {offers.length > 0
-                    ? "Listings were found, but none passed exact-variant and policy checks."
+                    ? "Listings were found, but none passed variant, stock, currency, budget, and policy checks."
                     : (scan.errorMessage ??
                       "No current merchant listing is available.")}
                 </p>
@@ -407,6 +411,8 @@ export function AmbiguousPanel({
   const [cameraOpen, setCameraOpen] = useState(false);
   const selectableCount = candidates.filter(candidateMayBeSelected).length;
   const referencesOnly = selectableCount === 0;
+  const leadingCandidate = candidates.find(candidateMayBeSelected) ?? null;
+  const leadingIsAlternative = leadingCandidate?.classification === "similar";
   const objectName =
     scan.observation?.productName ??
     scan.observation?.subcategory ??
@@ -418,14 +424,18 @@ export function AmbiguousPanel({
         {referencesOnly
           ? "Visual references"
           : scan.status === "SIMILAR_FOUND"
-            ? "Likely match"
+            ? leadingIsAlternative
+              ? "Connected alternative"
+              : "Likely match"
             : "Choice required"}
       </StatusStamp>
       <h1 id="candidate-title" className="mt-5 text-3xl leading-tight">
         {referencesOnly
           ? `Morrow sees ${objectName}.`
           : scan.status === "SIMILAR_FOUND"
-            ? "This looks close. You make the final call."
+            ? leadingIsAlternative
+              ? "A close catalogue alternative is available."
+              : "This looks close. You make the final call."
             : "More than one catalogue record fits."}
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">

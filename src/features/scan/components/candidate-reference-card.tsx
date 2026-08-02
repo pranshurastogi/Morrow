@@ -13,6 +13,9 @@ export function CandidateReferenceCard({
   onConfirm: (productId: string) => void;
 }) {
   const selectable = candidateMayBeSelected(candidate);
+  const liveAlternative =
+    candidate.classification === "similar" &&
+    ["shopify_ucp", "prava_ucp"].includes(candidate.source_provider ?? "");
   const firstContradiction = candidate.contradictions[0];
   const title = `${candidate.brand ? `${candidate.brand} ` : ""}${candidate.name}`;
 
@@ -45,7 +48,9 @@ export function CandidateReferenceCard({
                   ? "Exact evidence"
                   : candidate.classification === "likely_exact"
                     ? "Likely"
-                    : "Alternative"}
+                    : liveAlternative
+                      ? "Live alternative"
+                      : "Alternative"}
             </StatusStamp>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -61,6 +66,12 @@ export function CandidateReferenceCard({
           <p className="mt-2 font-mono text-[11px] text-brass">
             Evidence strength {Number(candidate.identity_score).toFixed(2)}
           </p>
+          {liveAlternative && (
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              A connected merchant listing. Choose it explicitly to compare its
+              current dispatch and open the Prava sandbox check.
+            </p>
+          )}
           {!selectable && (
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
               {firstContradiction
@@ -75,7 +86,9 @@ export function CandidateReferenceCard({
           className="mt-4 min-h-11 w-full"
           onClick={() => onConfirm(candidate.id)}
         >
-          Use this match
+          {candidate.classification === "similar"
+            ? "Choose this alternative"
+            : "Use this match"}
         </Button>
       )}
     </Plate>
