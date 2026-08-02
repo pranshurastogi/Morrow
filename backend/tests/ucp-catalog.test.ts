@@ -20,7 +20,9 @@ import {
 import { assertAllowedUcpEndpoint } from "../src/integrations/shopify-ucp/client";
 import {
   brandIndianMerchants,
+  canonicalBrandName,
   relevantIndianMerchants,
+  registeredBrandFromTitle,
 } from "../src/integrations/shopify-ucp/merchant-registry";
 
 const observation: ProductObservation = {
@@ -99,6 +101,42 @@ describe("Shopify UCP catalogue normalization", () => {
       "The House of Rare",
     );
     expect(brandIndianMerchants("Bare Anatomy")[0]?.name).toBe("Innovist");
+    expect(canonicalBrandName("Dot & Key Skincare")).toBe("Dot & Key");
+    expect(registeredBrandFromTitle("Dot & Key Barrier Repair Lip Balm")).toBe(
+      "Dot & Key",
+    );
+  });
+
+  test("recovers a missing registered brand from an exact product title", () => {
+    const product = ucpProductSchema.parse({
+      id: "gid://shopify/Product/dot-key-lip-balm",
+      title: "Dot & Key Ceramide & Peptide Barrier Repair Lip Balm 10gm",
+      variants: [
+        {
+          id: "gid://shopify/ProductVariant/red-romance",
+          title: "Red Romance",
+          price: { amount: 24900, currency: "INR" },
+          availability: { available: true },
+          seller: {
+            name: "Indian retailer",
+            url: "https://retailer.example",
+            domain: "retailer.example",
+          },
+        },
+      ],
+    });
+    const normalized = normalizeUcpVariant({
+      product,
+      variant: product.variants[0]!,
+      observation: {
+        ...observation,
+        brand: null,
+        productName:
+          "Dot & Key Ceramide & Peptide Barrier Repair Lip Balm 10gm",
+      },
+      sourceEndpoint: "https://catalog.shopify.com/api/ucp/mcp",
+    });
+    expect(normalized.brand).toBe("Dot & Key");
   });
 
   test("normalizes common catalogue size labels", () => {

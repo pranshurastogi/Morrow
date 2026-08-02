@@ -155,6 +155,47 @@ describe("merchant offer policy", () => {
     expect(proof.basis).toBe("official_brand_evidence");
   });
 
+  test("accepts a matching official shade when the storefront omits package size", () => {
+    const selected: CanonicalProductCandidate = {
+      ...product,
+      brand: "Dot & Key Skincare",
+      name: "Dot & Key Ceramide & Peptide Barrier Repair Lip Balm SPF 50 PA+++ Red Romance 10gm",
+      variant: "Red Romance",
+      size: { value: 10, unit: "g" },
+      gtin: null,
+    };
+    const storefrontProduct: CanonicalProductCandidate = {
+      ...selected,
+      id: "dot-key-storefront",
+      brand: "Dot & Key",
+      name: "Ceramide + Peptide Lip Balm In-Vivo Tested SPF 50+ PA+++",
+      size: null,
+    };
+    const proof = verifyCatalogEquivalence({
+      selected,
+      listingProduct: storefrontProduct,
+      officialBrandStore: true,
+    });
+    expect(proof.status).toBe("verified");
+    expect(proof.basis).toBe("official_brand_evidence");
+  });
+
+  test("does not infer an exact size when the storefront omits size and variant", () => {
+    const storefrontProduct: CanonicalProductCandidate = {
+      ...product,
+      id: "size-unknown-storefront",
+      gtin: null,
+      size: null,
+    };
+    expect(
+      verifyCatalogEquivalence({
+        selected: product,
+        listingProduct: storefrontProduct,
+        officialBrandStore: true,
+      }).status,
+    ).toBe("likely");
+  });
+
   test("lets catalogue equivalence supply a barcode omitted by the listing", () => {
     expect(
       combineOfferIdentityProof({

@@ -354,6 +354,41 @@ function merchantMatchesBrand(
   });
 }
 
+/**
+ * Returns the registry's stable display name when a provider emits a decorated
+ * brand such as "Dot & Key Skincare". Unknown brands remain untouched.
+ */
+export function canonicalBrandName(
+  value: string | null | undefined,
+): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return (
+    INDIA_UCP_MERCHANTS.find((merchant) =>
+      merchantMatchesBrand(merchant, trimmed),
+    )?.name ?? trimmed
+  );
+}
+
+/**
+ * Infers only a registered brand that begins a product title. Requiring a
+ * prefix avoids treating generic words later in a title as manufacturers.
+ */
+export function registeredBrandFromTitle(
+  value: string | null | undefined,
+): string | null {
+  const title = normalizeText(value ?? "");
+  if (!title) return null;
+  return (
+    INDIA_UCP_MERCHANTS.find((merchant) =>
+      [merchant.name, ...(merchant.brandAliases ?? [])].some((candidate) => {
+        const brand = normalizeText(candidate);
+        return title === brand || title.startsWith(`${brand} `);
+      }),
+    )?.name ?? null
+  );
+}
+
 function relevanceScore(
   merchant: UcpMerchantDefinition,
   observation: ProductObservation,

@@ -8,6 +8,7 @@ import {
   sizesEquivalent,
 } from "../recognition/normalization";
 import { normalizedSizeSchema } from "../../domain/product-observation";
+import { canonicalBrandName } from "../../integrations/shopify-ucp/merchant-registry";
 
 function listingAttribute(
   offer: NormalizedOffer,
@@ -87,8 +88,12 @@ export function verifyCatalogEquivalence(input: {
     contradictions.push("Catalogue model number differs");
   if (partMatch === false) contradictions.push("Catalogue part number differs");
 
-  const selectedBrand = normalizeText(selected.brand ?? "");
-  const listingBrand = normalizeText(listingProduct.brand ?? "");
+  const selectedBrand = normalizeText(
+    canonicalBrandName(selected.brand) ?? selected.brand ?? "",
+  );
+  const listingBrand = normalizeText(
+    canonicalBrandName(listingProduct.brand) ?? listingProduct.brand ?? "",
+  );
   const brandMatch =
     Boolean(selectedBrand && listingBrand) && selectedBrand === listingBrand;
   if (selectedBrand && listingBrand && !brandMatch) {
@@ -98,9 +103,7 @@ export function verifyCatalogEquivalence(input: {
   const sizeMatch =
     selected.size && listingProduct.size
       ? sizesEquivalent(selected.size, listingProduct.size)
-      : selected.size
-        ? false
-        : null;
+      : null;
   if (sizeMatch === false)
     contradictions.push("Catalogue package size differs");
 
@@ -134,11 +137,15 @@ export function verifyCatalogEquivalence(input: {
     selected.variant && listingProduct.variant
       ? jaccardSimilarity(selected.variant, listingProduct.variant)
       : null;
+  const presentationEvidence =
+    sizeMatch === true ||
+    (variantSimilarity !== null && variantSimilarity >= 0.75) ||
+    (!selected.size && !selected.variant && titleSimilarity >= 0.82);
   if (
     selectedHasIdentifier &&
     input.officialBrandStore &&
     brandMatch &&
-    sizeMatch !== false &&
+    presentationEvidence &&
     titleSimilarity >= 0.4
   ) {
     return {
@@ -148,10 +155,6 @@ export function verifyCatalogEquivalence(input: {
       basis: "brand_store_bridge",
     };
   }
-  const presentationEvidence =
-    sizeMatch === true ||
-    (variantSimilarity !== null && variantSimilarity >= 0.75) ||
-    (!selected.size && !selected.variant && titleSimilarity >= 0.82);
   if (
     input.officialBrandStore &&
     brandMatch &&

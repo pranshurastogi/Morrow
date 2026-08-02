@@ -14,8 +14,11 @@ import {
 import { createUcpCartQuote } from "../../integrations/shopify-ucp/cart";
 import {
   brandIndianMerchants,
+  canonicalBrandName,
   merchantByDomain,
+  registeredBrandFromTitle,
 } from "../../integrations/shopify-ucp/merchant-registry";
+import type { ProductObservation } from "../../domain/product-observation";
 
 function stableOfferId(scanId: string, listingId: string): string {
   const bytes = Buffer.from(
@@ -110,14 +113,28 @@ export async function searchVerifiedListings(
   sql: Sql = getDatabase(),
 ) {
   const [productRow] = await sql`
-    select cp.*, s.country_code as scan_country_code
+    select cp.*, s.country_code as scan_country_code,
+      s.observation as scan_observation
     from canonical_products cp
     join scans s on s.id = ${input.scanId}
     where cp.id = ${input.productId}
   `;
   if (!productRow) return [];
   const product = mapProduct(productRow);
-  const brandStores = brandIndianMerchants(product.brand);
+  const observation =
+    (productRow.scan_observation as ProductObservation | null) ?? null;
+  const evidenceBrand =
+    product.brand ??
+    observation?.brand ??
+    registeredBrandFromTitle(observation?.productName) ??
+    registeredBrandFromTitle(product.name);
+  const verificationProduct: CanonicalProductCandidate = {
+    ...product,
+    brand: canonicalBrandName(evidenceBrand),
+    variant: product.variant ?? observation?.variant ?? null,
+    size: product.size ?? observation?.size ?? null,
+  };
+  const brandStores = brandIndianMerchants(verificationProduct.brand);
   const brandStoreDomains = brandStores.map((merchant) => merchant.domain);
   const brandStoreCondition = brandStoreDomains.length
     ? sql`m.domain in ${sql(brandStoreDomains)}`
@@ -223,7 +240,7 @@ export async function searchVerifiedListings(
       };
       const sourceVerification = verifyMerchantVariant(listingProduct, offer);
       const equivalence = verifyCatalogEquivalence({
-        selected: product,
+        selected: verificationProduct,
         listingProduct,
         officialBrandStore,
       });

@@ -3,7 +3,11 @@ import type {
   ProductObservation,
 } from "../../domain/product-observation";
 import { normalizeText } from "../../modules/recognition/normalization";
-import { merchantByDomain } from "./merchant-registry";
+import {
+  canonicalBrandName,
+  merchantByDomain,
+  registeredBrandFromTitle,
+} from "./merchant-registry";
 import type { UcpProduct, UcpVariant } from "./schemas";
 
 const SIZE_PATTERN =
@@ -87,7 +91,7 @@ function inferredBrand(
   registryMerchantName: string | null,
 ): string | null {
   const declared = recordString(product, "brand", "vendor", "manufacturer");
-  if (declared) return declared;
+  if (declared) return canonicalBrandName(declared);
   const observed = observation.brand?.trim();
   if (observed) {
     const visibleSource = normalizeText(
@@ -102,9 +106,20 @@ function inferredBrand(
         .filter(Boolean)
         .join(" "),
     );
-    if (visibleSource.includes(normalizeText(observed))) return observed;
+    if (visibleSource.includes(normalizeText(observed))) {
+      return canonicalBrandName(observed);
+    }
   }
-  return registryMerchantName;
+  const titledBrand = registeredBrandFromTitle(product.title);
+  if (
+    titledBrand &&
+    normalizeText(observation.productName ?? "").includes(
+      normalizeText(titledBrand),
+    )
+  ) {
+    return titledBrand;
+  }
+  return canonicalBrandName(registryMerchantName);
 }
 
 function hostnameFromUrl(value: string | null | undefined): string | null {
