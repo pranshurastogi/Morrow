@@ -29,6 +29,7 @@ import {
   reconcilePublicPaymentState,
   shouldExpirePendingPayment,
 } from "./payment-status-policy";
+import { hasCurrentOfferIdentityPolicy } from "../offers/offer-policy";
 
 function embeddedSessionResponse(session: {
   id: string;
@@ -84,6 +85,13 @@ export async function startPaymentSession(input: {
     throw new MorrowError({
       code: "OFFER_EXPIRED",
       message: "The purchase approval has expired",
+      statusCode: 409,
+    });
+  }
+  if (!hasCurrentOfferIdentityPolicy(intent.offerSnapshot)) {
+    throw new MorrowError({
+      code: "OFFER_EXPIRED",
+      message: "The offer identity proof changed; refresh merchant offers",
       statusCode: 409,
     });
   }

@@ -8,6 +8,7 @@ import {
 import { getDatabase } from "../../infrastructure/database/client";
 import { databaseJson } from "../../infrastructure/database/json";
 import { resolveUserAddressId } from "../account/address-repository";
+import { hasCurrentOfferIdentityPolicy } from "../offers/offer-policy";
 
 export interface PurchaseIntentRecord {
   id: string;
@@ -135,6 +136,14 @@ export async function createPurchaseIntent(
         statusCode: 409,
       });
     }
+    const offerSnapshot = normalizedOfferSchema.parse(source.snapshot);
+    if (!hasCurrentOfferIdentityPolicy(offerSnapshot)) {
+      throw new MorrowError({
+        code: "OFFER_EXPIRED",
+        message: "The offer identity proof changed; refresh merchant offers",
+        statusCode: 409,
+      });
+    }
     if (source.identity_status !== "verified") {
       throw new MorrowError({
         code: "MORE_EVIDENCE_REQUIRED",
@@ -189,7 +198,6 @@ export async function createPurchaseIntent(
       modelNumber: source.model_number,
       partNumber: source.mpn,
     };
-    const offerSnapshot = normalizedOfferSchema.parse(source.snapshot);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1_000);
     const [row] = await transaction`
       insert into purchase_intents (

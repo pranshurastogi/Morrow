@@ -11,6 +11,15 @@ import {
 import { normalizedSizeSchema } from "../../domain/product-observation";
 import { canonicalBrandName } from "../../integrations/shopify-ucp/merchant-registry";
 
+export const OFFER_IDENTITY_POLICY_VERSION = "morrow-offer-identity-v2";
+
+export function hasCurrentOfferIdentityPolicy(offer: NormalizedOffer): boolean {
+  return (
+    offer.product.attributes["identity_policy_version"] ===
+    OFFER_IDENTITY_POLICY_VERSION
+  );
+}
+
 function listingAttribute(
   offer: NormalizedOffer,
   ...names: string[]

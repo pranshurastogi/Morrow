@@ -1,11 +1,16 @@
 import type { Sql } from "postgres";
 import { createHash } from "node:crypto";
-import type { NormalizedOffer } from "../../domain/commerce";
+import {
+  normalizedOfferSchema,
+  type NormalizedOffer,
+} from "../../domain/commerce";
 import { getDatabase } from "../../infrastructure/database/client";
 import type { CanonicalProductCandidate } from "../matching/verification";
 import { normalizedSizeSchema } from "../../domain/product-observation";
 import {
   combineOfferIdentityProof,
+  hasCurrentOfferIdentityPolicy,
+  OFFER_IDENTITY_POLICY_VERSION,
   rankOffers,
   type OfferRequirements,
   verifyCatalogEquivalence,
@@ -103,6 +108,7 @@ export function isPurchasableOffer(
 ): boolean {
   return (
     !offer.illustrative &&
+    hasCurrentOfferIdentityPolicy(offer) &&
     offer.identityVerification.status === "verified" &&
     offer.rejectedReasons.length === 0
   );
@@ -255,6 +261,7 @@ export async function searchVerifiedListings(
           attributes: {
             ...offer.product.attributes,
             identity_basis: equivalence.basis,
+            identity_policy_version: OFFER_IDENTITY_POLICY_VERSION,
             verified_product_id: product.id,
           },
         },
@@ -347,11 +354,32 @@ export async function listOffersForUser(
     where o.scan_id = ${scanId} and o.canonical_product_id = ${productId} and s.user_id = ${userId}
     order by o.ranking_score desc nulls last
   `;
-  return rows.map((row) => ({
-    ...row.snapshot,
-    rankingScore: Number(row.ranking_score),
-    rankingReasons: row.ranking_reasons,
-    rejectedReasons: row.rejected_reasons,
-    expiresAt: new Date(String(row.expires_at)).toISOString(),
-  }));
+  return rows.map((row) => {
+    const snapshot = normalizedOfferSchema.parse(row.snapshot);
+    const currentIdentityPolicy = hasCurrentOfferIdentityPolicy(snapshot);
+    const staleReason =
+      "Offer identity proof changed; refresh the merchant catalogues";
+    const persistedRejectedReasons = Array.isArray(row.rejected_reasons)
+      ? row.rejected_reasons.map(String)
+      : [];
+    return {
+      ...snapshot,
+      identityVerification: currentIdentityPolicy
+        ? snapshot.identityVerification
+        : {
+            status: "rejected" as const,
+            score: 0,
+            contradictions: [
+              ...snapshot.identityVerification.contradictions,
+              staleReason,
+            ],
+          },
+      rankingScore: currentIdentityPolicy ? Number(row.ranking_score) : 0,
+      rankingReasons: currentIdentityPolicy ? row.ranking_reasons : [],
+      rejectedReasons: currentIdentityPolicy
+        ? persistedRejectedReasons
+        : [...new Set([...persistedRejectedReasons, staleReason])],
+      expiresAt: new Date(String(row.expires_at)).toISOString(),
+    };
+  });
 }

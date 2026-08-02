@@ -3,6 +3,8 @@ import type { NormalizedOffer } from "../src/domain/commerce";
 import type { CanonicalProductCandidate } from "../src/modules/matching/verification";
 import {
   combineOfferIdentityProof,
+  hasCurrentOfferIdentityPolicy,
+  OFFER_IDENTITY_POLICY_VERSION,
   rankOffers,
   verifyCatalogEquivalence,
   verifyMerchantVariant,
@@ -63,6 +65,23 @@ function offer(overrides: Partial<NormalizedOffer> = {}): NormalizedOffer {
 }
 
 describe("merchant offer policy", () => {
+  test("requires the current policy stamp before an offer can be reused", () => {
+    expect(hasCurrentOfferIdentityPolicy(offer())).toBe(false);
+    expect(
+      hasCurrentOfferIdentityPolicy(
+        offer({
+          product: {
+            ...offer().product,
+            attributes: {
+              ...offer().product.attributes,
+              identity_policy_version: OFFER_IDENTITY_POLICY_VERSION,
+            },
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
   test("verifies exact merchant identifiers", () => {
     expect(verifyMerchantVariant(product, offer()).status).toBe("verified");
   });
