@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as DispatchesRouteImport } from './routes/dispatches'
+import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as ScanRouteImport } from './routes/scan'
 
@@ -36,6 +37,11 @@ const DispatchesRoute = DispatchesRouteImport.update({
   path: '/dispatches',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HowItWorksRoute = HowItWorksRouteImport.update({
+  id: '/how-it-works',
+  path: '/how-it-works',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RequestsRoute = RequestsRouteImport.update({
   id: '/requests',
   path: '/requests',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/archive': typeof ArchiveRoute
   '/dispatches': typeof DispatchesRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/requests': typeof RequestsRoute
   '/scan': typeof ScanRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/archive': typeof ArchiveRoute
   '/dispatches': typeof DispatchesRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/requests': typeof RequestsRoute
   '/scan': typeof ScanRoute
 }
@@ -69,21 +77,36 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/archive': typeof ArchiveRoute
   '/dispatches': typeof DispatchesRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/requests': typeof RequestsRoute
   '/scan': typeof ScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/account' | '/archive' | '/dispatches' | '/requests' | '/scan'
+    | '/'
+    | '/account'
+    | '/archive'
+    | '/dispatches'
+    | '/how-it-works'
+    | '/requests'
+    | '/scan'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/account' | '/archive' | '/dispatches' | '/requests' | '/scan'
+  to:
+    | '/'
+    | '/account'
+    | '/archive'
+    | '/dispatches'
+    | '/how-it-works'
+    | '/requests'
+    | '/scan'
   id:
     | '__root__'
     | '/'
     | '/account'
     | '/archive'
     | '/dispatches'
+    | '/how-it-works'
     | '/requests'
     | '/scan'
   fileRoutesById: FileRoutesById
@@ -93,6 +116,7 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   ArchiveRoute: typeof ArchiveRoute
   DispatchesRoute: typeof DispatchesRoute
+  HowItWorksRoute: typeof HowItWorksRoute
   RequestsRoute: typeof RequestsRoute
   ScanRoute: typeof ScanRoute
 }
@@ -127,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DispatchesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/how-it-works': {
+      id: '/how-it-works'
+      path: '/how-it-works'
+      fullPath: '/how-it-works'
+      preLoaderRoute: typeof HowItWorksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/requests': {
       id: '/requests'
       path: '/requests'
@@ -149,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   ArchiveRoute: ArchiveRoute,
   DispatchesRoute: DispatchesRoute,
+  HowItWorksRoute: HowItWorksRoute,
   RequestsRoute: RequestsRoute,
   ScanRoute: ScanRoute,
 }

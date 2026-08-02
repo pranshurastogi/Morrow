@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+
 export function SiteFooter() {
   return (
     <footer className="border-t-2 border-double border-ink/40 bg-card">
@@ -19,19 +21,25 @@ export function SiteFooter() {
             aria-label="Footer"
           >
             <a
-              href="#how"
+              href="/#how"
               className="text-muted-foreground hover:text-foreground"
             >
               Process
             </a>
+            <Link
+              to="/how-it-works"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Under the hood
+            </Link>
             <a
-              href="#proof"
+              href="/#proof"
               className="text-muted-foreground hover:text-foreground"
             >
               Proof
             </a>
             <a
-              href="#authority"
+              href="/#authority"
               className="text-muted-foreground hover:text-foreground"
             >
               Guardrails

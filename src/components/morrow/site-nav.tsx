@@ -6,10 +6,11 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import seal from "@/assets/morrow-seal.png";
 
 const links = [
-  { label: "How it works", href: "#how" },
-  { label: "Proof", href: "#proof" },
-  { label: "Guardrails", href: "#authority" },
-];
+  { label: "Process", href: "/#how" },
+  { label: "Under the hood", to: "/how-it-works" },
+  { label: "Proof", href: "/#proof" },
+  { label: "Guardrails", href: "/#authority" },
+] as const;
 
 export function SiteNav() {
   const [open, setOpen] = useState(false);
@@ -46,13 +47,23 @@ export function SiteNav() {
           aria-label="Main"
         >
           {links.map((l) => (
-            <a
-              key={l.href}
-              href={l.href}
-              className="header-index-link rounded-sm px-3 py-2 label-caps text-muted-foreground"
-            >
-              {l.label}
-            </a>
+            <span key={l.label} className="contents">
+              {"to" in l ? (
+                <Link
+                  to={l.to}
+                  className="header-index-link rounded-sm px-3 py-2 label-caps text-muted-foreground"
+                >
+                  {l.label}
+                </Link>
+              ) : (
+                <a
+                  href={l.href}
+                  className="header-index-link rounded-sm px-3 py-2 label-caps text-muted-foreground"
+                >
+                  {l.label}
+                </a>
+              )}
+            </span>
           ))}
         </nav>
 
@@ -99,17 +110,31 @@ export function SiteNav() {
               </div>
               <nav className="flex flex-col p-2" aria-label="Mobile">
                 {links.map((l, i) => (
-                  <a
-                    key={l.href}
-                    href={l.href}
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-11 items-center justify-between border-b border-border/70 px-3 text-sm"
-                  >
-                    {l.label}
-                    <span className="font-mono text-[11px] text-brass">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                  </a>
+                  <span key={l.label} className="contents">
+                    {"to" in l ? (
+                      <Link
+                        to={l.to}
+                        onClick={() => setOpen(false)}
+                        className="flex min-h-11 items-center justify-between border-b border-border/70 px-3 text-sm"
+                      >
+                        {l.label}
+                        <span className="font-mono text-[11px] text-brass">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                      </Link>
+                    ) : (
+                      <a
+                        href={l.href}
+                        onClick={() => setOpen(false)}
+                        className="flex min-h-11 items-center justify-between border-b border-border/70 px-3 text-sm"
+                      >
+                        {l.label}
+                        <span className="font-mono text-[11px] text-brass">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                      </a>
+                    )}
+                  </span>
                 ))}
               </nav>
               <div className="p-4">
