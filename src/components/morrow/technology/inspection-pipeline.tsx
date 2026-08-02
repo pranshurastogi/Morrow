@@ -61,10 +61,10 @@ const stages: PipelineStage[] = [
     short: "Find",
     icon: Search,
     input: "Identifiers + normalised attributes",
-    work: "Merge exact IDs, full text, vectors, history and live UCP catalogues.",
-    output: "Bounded candidate union",
+    work: "Run identifier, strict text, broad lexical, vector, history and staged UCP retrieval in parallel.",
+    output: "Consensus-ranked candidate union",
     gate: "Retrieval proposes; it never verifies",
-    optimisation: "Fast identifier path before broad recall",
+    optimisation: "Wider merchant fan-out only when recall is thin",
   },
   {
     name: "Verify",

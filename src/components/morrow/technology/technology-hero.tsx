@@ -8,6 +8,14 @@ const promises = [
   { icon: Fingerprint, label: "A passkey before payment" },
 ];
 
+const machineReceipts = [
+  ["05", "purpose-built views"],
+  ["06", "retrieval lanes"],
+  ["≤09", "visual finalists"],
+  ["≤02", "precision finalists"],
+  ["00", "card digits retained"],
+];
+
 export function TechnologyHero() {
   return (
     <section className="tech-hero overflow-hidden border-b border-border">
@@ -49,6 +57,15 @@ export function TechnologyHero() {
             ))}
           </ol>
         </div>
+
+        <dl className="tech-proof-strip lg:col-span-2">
+          {machineReceipts.map(([value, label]) => (
+            <div key={label}>
+              <dt>{value}</dt>
+              <dd>{label}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );

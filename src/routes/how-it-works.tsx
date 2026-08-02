@@ -6,6 +6,7 @@ import {
   DurableWorkflow,
   InspectionPipeline,
   OperationsBoard,
+  RetrievalObservatory,
   RuntimeMap,
   TechnologyCta,
   TechnologyHero,
@@ -38,6 +39,7 @@ function HowItWorks() {
         <TechnologyHero />
         <RuntimeMap />
         <InspectionPipeline />
+        <RetrievalObservatory />
         <DecisionEngine />
         <DurableWorkflow />
         <OperationsBoard />

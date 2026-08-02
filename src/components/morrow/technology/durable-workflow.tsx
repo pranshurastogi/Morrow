@@ -41,7 +41,7 @@ export function DurableWorkflow() {
   return (
     <section id="state" className="border-y border-border bg-card">
       <div className="mx-auto max-w-6xl px-4 py-16">
-        <SectionKicker index="05">Durable workflow</SectionKicker>
+        <SectionKicker index="06">Durable workflow</SectionKicker>
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <h2 className="max-w-3xl text-balance text-3xl sm:text-4xl">
             The request survives refreshes, retries and restarts.

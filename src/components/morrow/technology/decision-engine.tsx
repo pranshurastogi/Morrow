@@ -50,7 +50,7 @@ const computePaths = [
 export function DecisionEngine() {
   return (
     <section id="verification" className="mx-auto max-w-6xl px-4 py-16">
-      <SectionKicker index="04">Decision core</SectionKicker>
+      <SectionKicker index="05">Decision core</SectionKicker>
       <h2 className="mt-4 max-w-3xl text-balance text-3xl sm:text-4xl">
         Perception supplies evidence. Code decides what it means.
       </h2>

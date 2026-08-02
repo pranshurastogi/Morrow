@@ -37,8 +37,9 @@ const operatingRules = [
 const releaseGates = [
   "Exact precision",
   "Wrong-variant false positives",
-  "Recall at ten",
-  "Selective coverage",
+  "Retrieval recall at 1 / 5 / 10",
+  "Source-backed offer coverage",
+  "No-result rate",
   "p95 stage latency",
   "Cost per verified order",
 ];
@@ -46,7 +47,7 @@ const releaseGates = [
 export function OperationsBoard() {
   return (
     <section id="operations" className="mx-auto max-w-6xl px-4 py-16">
-      <SectionKicker index="06">Operating discipline</SectionKicker>
+      <SectionKicker index="07">Operating discipline</SectionKicker>
       <h2 className="mt-4 max-w-3xl text-balance text-3xl sm:text-4xl">
         Designed to fail visibly, recover narrowly and scale calmly.
       </h2>
