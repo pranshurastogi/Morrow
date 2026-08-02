@@ -39,9 +39,11 @@ function formatElapsed(seconds: number): string {
 export function ProgressPanel({
   stage,
   scan,
+  previewUrl,
 }: {
   stage: ActiveStage;
   scan: ScanRecord | null;
+  previewUrl: string | null;
 }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [factIndex, setFactIndex] = useState(0);
@@ -88,11 +90,19 @@ export function ProgressPanel({
       </header>
 
       <div className="inspection-machine" data-phase={narrative.icon}>
-        <div className="inspection-aperture" aria-hidden="true">
+        <div
+          className="inspection-aperture"
+          data-has-preview={Boolean(previewUrl)}
+          aria-hidden="true"
+        >
+          {previewUrl ? (
+            <img className="inspection-preview" src={previewUrl} alt="" />
+          ) : null}
           <Aperture className="inspection-aperture-ring" />
           <span className="inspection-object-mark">
             <StoryIcon />
           </span>
+          <span className="inspection-focus-brackets" />
           <span className="inspection-sweep" />
         </div>
         <div

@@ -80,6 +80,7 @@ function AuthenticatedScanDesk() {
   const { state, actions } = useScanFlow();
   const {
     stage,
+    previewUrl,
     scan,
     candidate,
     candidates,
@@ -113,7 +114,7 @@ function AuthenticatedScanDesk() {
           <CapturePanel onFile={(file) => void actions.startScan(file)} />
         )}
         {(stage === "uploading" || stage === "inspecting") && (
-          <ProgressPanel stage={stage} scan={scan} />
+          <ProgressPanel stage={stage} scan={scan} previewUrl={previewUrl} />
         )}
         {stage === "more_evidence" && scan && (
           <EvidenceRequest

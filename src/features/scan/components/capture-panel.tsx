@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import {
   Camera,
+  Focus,
   Image as ImageIcon,
   ScanLine,
   ShieldCheck,
@@ -29,11 +30,17 @@ export function CapturePanel({ onFile }: CapturePanelProps) {
       <Plate className="relative mt-6 overflow-hidden p-4">
         <div className="pointer-events-none absolute inset-3 border border-dashed border-brass/50" />
         <div className="relative flex flex-col items-center gap-4 py-6">
-          <div className="grid h-24 w-24 place-items-center rounded-full border-2 border-brass/70">
-            <div className="grid h-16 w-16 place-items-center rounded-full border border-ink/25 bg-primary/5">
-              <ScanLine className="h-7 w-7 text-primary" aria-hidden />
-            </div>
+          <div className="capture-alignment-guide" aria-hidden="true">
+            <span className="capture-alignment-corner" data-corner="tl" />
+            <span className="capture-alignment-corner" data-corner="tr" />
+            <span className="capture-alignment-corner" data-corner="bl" />
+            <span className="capture-alignment-corner" data-corner="br" />
+            <Focus className="h-8 w-8 text-primary" />
+            <span className="capture-alignment-line" />
           </div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            Fill the guide · keep the label square · avoid glare
+          </p>
           <Button
             size="lg"
             className="min-h-12 w-full text-base active:translate-y-px"
@@ -78,13 +85,13 @@ export function CapturePanel({ onFile }: CapturePanelProps) {
       />
 
       <div className="mt-8 flex gap-3 border-y border-border py-4">
-        <ShieldCheck
-          className="mt-0.5 h-5 w-5 shrink-0 text-primary"
-          aria-hidden
-        />
+        <div className="flex shrink-0 gap-1 text-primary" aria-hidden="true">
+          <ScanLine className="mt-0.5 h-5 w-5" />
+          <ShieldCheck className="mt-0.5 h-5 w-5" />
+        </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Morrow checks identifiers and contradictions before it calls anything
-          an exact match.
+          Morrow aligns the object and label separately, then checks identifiers
+          and contradictions before calling anything exact.
         </p>
       </div>
     </section>

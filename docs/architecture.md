@@ -17,9 +17,9 @@ Canonical products represent real-world identity. Merchant listings represent of
 
 ## Retrieval and verification
 
-Identifier, PostgreSQL full-text, pgvector, prior confirmations, and live Shopify Global Catalog retrieval merge into a bounded candidate set. Relevant supplied Indian storefronts are queried as targeted fallbacks. Results are normalized into canonical variants and merchant listings with source provenance.
+Identifier, strict and broad PostgreSQL full-text, pgvector, prior confirmations, and live Shopify Global Catalog retrieval merge into a bounded candidate set. Relevant supplied Indian storefronts are queried as targeted fallbacks. Results are normalized into canonical variants and merchant listings with source provenance.
 
-The vision model compares at most five catalogue images with the buyer's prepared images and returns only structured observations. Deterministic code computes the visual score and applies identifier, size, brand, model, and part-number contradictions. A visual comparison can support a likely match but can never create exact status by itself.
+Image preparation creates bounded full, object-focused, label-focused, OCR, and preview views. The vision observer uses explicit detail by role. At most nine catalogue finalists are compared in parallel batches of three so evidence cannot leak across a crowded candidate set. The comparator returns categorical match, mismatch, or unknown states; deterministic code computes the visual score and applies identifier, size, variant, brand, model, and part-number contradictions. Close plausible finalists receive one bounded escalation-model pass. A visual comparison can support a likely match but can never create exact status by itself.
 
 Model confidence is never used as final confidence. The score is computed by policy code and exact status still requires the categorical identifier rule.
 

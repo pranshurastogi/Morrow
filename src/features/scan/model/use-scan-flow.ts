@@ -49,6 +49,7 @@ export type ScanStage =
 
 interface State {
   stage: ScanStage;
+  previewUrl: string | null;
   scan: ScanRecord | null;
   candidate: Candidate | null;
   candidates: Candidate[];
@@ -69,6 +70,7 @@ interface State {
 
 type Action =
   | { type: "stage"; stage: ScanStage }
+  | { type: "preview"; previewUrl: string }
   | { type: "scan"; scan: ScanRecord; stage?: ScanStage }
   | {
       type: "result";
@@ -110,6 +112,7 @@ type Action =
 
 const initialState: State = {
   stage: "idle",
+  previewUrl: null,
   scan: null,
   candidate: null,
   candidates: [],
@@ -145,6 +148,8 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "stage":
       return { ...state, stage: action.stage, error: null };
+    case "preview":
+      return { ...state, previewUrl: action.previewUrl };
     case "scan":
       return {
         ...state,
@@ -338,6 +343,14 @@ export function useScanFlow() {
   const paymentSurfaceApproved = useRef(false);
   const paymentSurfaceFailed = useRef(false);
   const sandboxSurfaceApproved = useRef(false);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const setPreview = useCallback((file: File) => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    previewUrlRef.current = previewUrl;
+    dispatch({ type: "preview", previewUrl });
+  }, []);
 
   const hydrateResult = useCallback(async (scan: ScanRecord) => {
     if (!scan.selectedProductId)
@@ -418,6 +431,7 @@ export function useScanFlow() {
 
   const startScan = useCallback(
     async (file: File) => {
+      setPreview(file);
       dispatch({ type: "stage", stage: "uploading" });
       try {
         const result = await createScanFromFile(file);
@@ -427,12 +441,13 @@ export function useScanFlow() {
         dispatch({ type: "error", error });
       }
     },
-    [followScan],
+    [followScan, setPreview],
   );
 
   const addEvidence = useCallback(
     async (file: File) => {
       if (!state.scan) return;
+      setPreview(file);
       dispatch({ type: "stage", stage: "uploading" });
       try {
         const role =
@@ -446,7 +461,7 @@ export function useScanFlow() {
         dispatch({ type: "error", error });
       }
     },
-    [followScan, state.scan],
+    [followScan, setPreview, state.scan],
   );
 
   const retryInspection = useCallback(async () => {
@@ -799,6 +814,8 @@ export function useScanFlow() {
     paymentSurfaceFailed.current = false;
     sandboxSurfaceApproved.current = false;
     sandboxSessionPending.current = false;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
     dispatch({ type: "reset" });
   }, []);
 
@@ -808,6 +825,8 @@ export function useScanFlow() {
       paymentAbort.current?.abort();
       paymentPollSessionId.current = null;
       sandboxPollSessionId.current = null;
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
     },
     [],
   );

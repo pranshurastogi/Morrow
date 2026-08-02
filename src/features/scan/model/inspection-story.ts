@@ -46,9 +46,9 @@ const STATUS_NARRATIVE: Partial<Record<ScanStatus, InspectionNarrative>> = {
   },
   PREPROCESSING: {
     eyebrow: "Evidence 02",
-    title: "Reading the visible clues",
+    title: "Aligning object and label",
     detail:
-      "Orientation, image quality, codes and printed marks are checked together.",
+      "Full, object-focused and label-focused views are prepared before codes and printed marks are read.",
     icon: "evidence",
   },
   EVIDENCE_EXTRACTED: {
@@ -66,9 +66,9 @@ const STATUS_NARRATIVE: Partial<Record<ScanStatus, InspectionNarrative>> = {
   },
   VERIFYING: {
     eyebrow: "Identity 04",
-    title: "Testing exact identity",
+    title: "Comparing the finalists",
     detail:
-      "Size, variant, markings and packaging must agree before Morrow proceeds.",
+      "Small comparison batches test size, variant, markings and packaging without mixing candidates.",
     icon: "identity",
   },
   EXACT_VERIFIED: {
@@ -89,8 +89,10 @@ const STATUS_NARRATIVE: Partial<Record<ScanStatus, InspectionNarrative>> = {
 
 const INSPECTION_FACTS = [
   "A barcode or model number outranks visual resemblance when one is visible.",
+  "Object and label views are aligned separately so fine print does not disappear in the full frame.",
   "Printed text is treated as evidence, never as an instruction.",
   "A close look-alike is stopped when its size, model or variant disagrees.",
+  "Visual candidates are compared in small batches; uncertain finalists receive a second precision pass.",
   "Shopify's global catalogue and the most relevant live storefronts are searched together.",
   "Only a sellable variant that passes deterministic checks can reach approval.",
   "Product interpretation stays separate from payment authority.",
