@@ -4,6 +4,7 @@ import { Plate, StatusStamp } from "@/components/morrow/bits";
 import { Button } from "@/components/ui/button";
 import type { ScanRecord } from "../api/types";
 import { CameraCaptureDialog } from "./camera-capture-dialog";
+import { ExternalCatalogLinks } from "./external-catalog-links";
 import { ObservationSummary } from "./observation-summary";
 
 export function EvidenceRequest({
@@ -38,6 +39,7 @@ export function EvidenceRequest({
           </p>
         </div>
       </Plate>
+      <ExternalCatalogLinks scan={scan} className="mt-3" />
       <Button
         className="mt-5 min-h-12 w-full text-base"
         onClick={() => setCameraOpen(true)}

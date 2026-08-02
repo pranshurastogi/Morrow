@@ -22,6 +22,7 @@ import type {
 import { CameraCaptureDialog } from "./camera-capture-dialog";
 import { candidateMayBeSelected } from "../model/candidate-presentation";
 import { CandidateReferenceCard } from "./candidate-reference-card";
+import { ExternalCatalogLinks } from "./external-catalog-links";
 import { ObservationSummary } from "./observation-summary";
 
 function formatMoney(amountMinor: number, currency: string): string {
@@ -240,50 +241,57 @@ export function ResultPanel({
           )}
         </Plate>
       ) : (
-        <Plate className="mt-3 p-4">
-          <div className="flex gap-3">
-            <CircleAlert
-              className="mt-0.5 h-5 w-5 shrink-0 text-postal"
-              aria-hidden
-            />
-            <div>
-              <p className="font-medium">No purchasable exact offer yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {offers.length > 0
-                  ? "Listings were found, but none passed exact-variant and policy checks."
-                  : (scan.errorMessage ??
-                    "No current merchant listing is available.")}
-              </p>
-              {rejectionReasons.length > 0 && (
-                <ul className="mt-3 space-y-1 font-mono text-[11px] text-muted-foreground">
-                  {rejectionReasons.map((reason) => (
-                    <li key={reason}>— {reason}</li>
-                  ))}
-                </ul>
-              )}
+        <>
+          <Plate className="mt-3 p-4">
+            <div className="flex gap-3">
+              <CircleAlert
+                className="mt-0.5 h-5 w-5 shrink-0 text-postal"
+                aria-hidden
+              />
+              <div>
+                <p className="font-medium">No purchasable exact offer yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {offers.length > 0
+                    ? "Listings were found, but none passed exact-variant and policy checks."
+                    : (scan.errorMessage ??
+                      "No current merchant listing is available.")}
+                </p>
+                {rejectionReasons.length > 0 && (
+                  <ul className="mt-3 space-y-1 font-mono text-[11px] text-muted-foreground">
+                    {rejectionReasons.map((reason) => (
+                      <li key={reason}>— {reason}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4 min-h-11 w-full"
-            disabled={offerRefreshing}
-            onClick={onRefreshOffers}
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${offerRefreshing ? "animate-dial" : ""}`}
-              aria-hidden
-            />
-            {offerRefreshing
-              ? "Checking live catalogues"
-              : "Search merchants again"}
-          </Button>
-          {offerRefreshMessage && (
-            <p className="mt-3 text-xs text-muted-foreground" role="status">
-              {offerRefreshMessage}
-            </p>
-          )}
-        </Plate>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 min-h-11 w-full"
+              disabled={offerRefreshing}
+              onClick={onRefreshOffers}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${offerRefreshing ? "animate-dial" : ""}`}
+                aria-hidden
+              />
+              {offerRefreshing
+                ? "Checking live catalogues"
+                : "Search merchants again"}
+            </Button>
+            {offerRefreshMessage && (
+              <p className="mt-3 text-xs text-muted-foreground" role="status">
+                {offerRefreshMessage}
+              </p>
+            )}
+          </Plate>
+          <ExternalCatalogLinks
+            scan={scan}
+            candidate={candidate}
+            className="mt-3"
+          />
+        </>
       )}
 
       {offer && checkoutCapability?.available === false && (
@@ -454,6 +462,8 @@ export function AmbiguousPanel({
           </p>
         </Plate>
       )}
+
+      {referencesOnly && <ExternalCatalogLinks scan={scan} className="mt-5" />}
 
       <div className="mt-5 grid gap-2 sm:grid-cols-2">
         <Button
