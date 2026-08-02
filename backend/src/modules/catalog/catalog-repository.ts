@@ -25,6 +25,46 @@ import {
   openAiSafetyIdentifier,
 } from "../usage/ai-usage-repository";
 
+export interface RetrievalRanking {
+  ids: string[];
+  weight: number;
+}
+
+/**
+ * Score-only retrieval channels (FTS, embeddings, history, live catalogues)
+ * use incomparable scales. Reciprocal-rank fusion rewards agreement between
+ * them without pretending those raw scores are calibrated probabilities.
+ */
+export function reciprocalRankFusion(
+  rankings: RetrievalRanking[],
+  rankConstant = 60,
+): Map<string, number> {
+  const scores = new Map<string, number>();
+  const activeRankings = rankings.filter(
+    (ranking) => ranking.weight > 0 && ranking.ids.length > 0,
+  );
+  const maximum = activeRankings.reduce(
+    (sum, ranking) => sum + ranking.weight / (rankConstant + 1),
+    0,
+  );
+  if (maximum <= 0) return scores;
+  for (const ranking of activeRankings) {
+    const seen = new Set<string>();
+    ranking.ids.forEach((id, index) => {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      scores.set(
+        id,
+        (scores.get(id) ?? 0) + ranking.weight / (rankConstant + index + 1),
+      );
+    });
+  }
+  for (const [id, score] of scores) {
+    scores.set(id, Math.max(0, Math.min(1, score / maximum)));
+  }
+  return scores;
+}
+
 function productSearchText(observation: ProductObservation): string {
   return [
     observation.brand,
@@ -194,7 +234,10 @@ async function createEmbedding(input: {
     if (error instanceof MorrowError && error.code === "AI_BUDGET_EXCEEDED") {
       return null;
     }
-    throw error;
+    // Dense retrieval is an independent recall channel. A transient model
+    // outage must not discard exact identifiers, full-text results, history,
+    // or newly discovered UCP products.
+    return null;
   }
 }
 
@@ -280,6 +323,18 @@ export async function retrieveCandidates(
       `
     : [];
 
+  const rowIds = (rows: Iterable<Record<string, unknown>>): string[] =>
+    [...rows].map((row) => String(row.id));
+  const fusionScores = reciprocalRankFusion([
+    { ids: rowIds(identifierRows), weight: 2.5 },
+    { ids: rowIds(preferredRows), weight: 1.15 },
+    { ids: rowIds(strictTextRows), weight: 1.35 },
+    { ids: rowIds(broadTextRows), weight: 0.8 },
+    { ids: rowIds(vectorRows), weight: 1.1 },
+    { ids: rowIds(historyRows), weight: 0.75 },
+  ]);
+  const exactIdentifierIds = new Set(rowIds(identifierRows));
+
   const candidates = new Map<string, CanonicalProductCandidate>();
   const ingest = (
     rows: Iterable<Record<string, unknown>>,
@@ -328,10 +383,13 @@ export async function retrieveCandidates(
         .join(" ");
       return {
         ...candidate,
-        retrievalScore: Math.max(
-          candidate.retrievalScore,
-          jaccardSimilarity(query, candidateText) * 0.85,
-        ),
+        retrievalScore: exactIdentifierIds.has(candidate.id)
+          ? 1
+          : Math.max(
+              candidate.retrievalScore * 0.55 +
+                (fusionScores.get(candidate.id) ?? 0) * 0.45,
+              jaccardSimilarity(query, candidateText) * 0.85,
+            ),
       };
     })
     .sort((a, b) => b.retrievalScore - a.retrievalScore)

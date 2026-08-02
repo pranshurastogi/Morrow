@@ -5,6 +5,7 @@ import {
   buildCatalogQuery,
   buildIdentifierCatalogQuery,
   buildRelaxedCatalogQuery,
+  buildVisualCatalogQueries,
 } from "../src/integrations/shopify-ucp/discovery";
 import { catalogIdentityKey } from "../src/integrations/shopify-ucp/catalog-ingestion";
 import {
@@ -86,6 +87,10 @@ describe("Shopify UCP catalogue normalization", () => {
     expect(buildRelaxedCatalogQuery(textFreeMouse)).toBe(
       "wireless computer mouse",
     );
+    expect(buildVisualCatalogQueries(textFreeMouse)).toEqual([
+      "wireless computer mouse black ergonomic mouse",
+      "wireless computer mouse scroll wheel",
+    ]);
     expect(
       relevantIndianMerchants(textFreeMouse, 8).some((merchant) =>
         merchant.category.includes("electronic accessories"),
@@ -127,7 +132,7 @@ describe("Shopify UCP catalogue normalization", () => {
     );
     expect(
       buildCatalogQueryPlan(identified).map((query) => query.kind),
-    ).toEqual(["identifier", "exact", "relaxed"]);
+    ).toEqual(["identifier", "exact", "relaxed", "visual", "visual"]);
   });
 
   test("routes both the exact brand store and relevant category storefronts", () => {

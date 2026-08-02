@@ -73,7 +73,12 @@ describe("candidate verification", () => {
   test("rejects a visually similar wrong barcode", () => {
     const result = verifyCandidate(
       observation,
-      candidate({ gtin: "3337875597005" }),
+      candidate({
+        gtin: "3337875597005",
+        sourceProvider: "shopify_ucp",
+        sourceProductId: "gid://shopify/Product/wrong-size",
+        sourceVariantId: "gid://shopify/ProductVariant/wrong-size",
+      }),
     );
     expect(result.classification).toBe("rejected");
     expect(result.purchaseScore).toBe(0);
@@ -185,5 +190,78 @@ describe("candidate verification", () => {
         (item) => item.id,
       ),
     ).toEqual(["close", "distant"]);
+  });
+
+  test("keeps a strongly visual live listing selectable as an explicit alternative", () => {
+    const textFreeObservation: ProductObservation = {
+      ...observation,
+      category: "computer accessories",
+      subcategory: "computer mouse",
+      brand: null,
+      productName: "wireless computer mouse",
+      variant: null,
+      size: null,
+      visibleIdentifiers: [],
+      visualSearchTerms: ["wireless computer mouse", "black ergonomic mouse"],
+      exactIdentificationPossible: false,
+      missingEvidence: ["brand", "model number"],
+    };
+    const result = verifyCandidate(
+      textFreeObservation,
+      candidate({
+        id: "live-alternative",
+        category: "computer accessories",
+        brand: "Portronics",
+        name: "Wireless Ergonomic Computer Mouse",
+        variant: null,
+        size: null,
+        gtin: null,
+        imageSimilarity: 0.47,
+        retrievalScore: 0.41,
+        sourceProvider: "shopify_ucp",
+        sourceProductId: "gid://shopify/Product/mouse",
+        sourceVariantId: "gid://shopify/ProductVariant/mouse-black",
+        sourceMerchantDomain: "portronicsindia.myshopify.com",
+      }),
+    );
+
+    expect(result.classification).toBe("similar");
+    expect(result.classification).not.toBe("exact_verified");
+    expect(result.contradictions).toHaveLength(0);
+  });
+
+  test("keeps a weak live visual result as a reference rather than a selectable alternative", () => {
+    const textFreeObservation: ProductObservation = {
+      ...observation,
+      category: "computer accessories",
+      subcategory: "computer mouse",
+      brand: null,
+      productName: "wireless computer mouse",
+      variant: null,
+      size: null,
+      visibleIdentifiers: [],
+      visualSearchTerms: ["wireless computer mouse", "black ergonomic mouse"],
+      exactIdentificationPossible: false,
+      missingEvidence: ["brand", "model number"],
+    };
+    const result = verifyCandidate(
+      textFreeObservation,
+      candidate({
+        id: "weak-live-reference",
+        category: "computer accessories",
+        brand: "Portronics",
+        name: "Wireless Keyboard",
+        variant: null,
+        size: null,
+        gtin: null,
+        imageSimilarity: 0.21,
+        retrievalScore: 0.39,
+        sourceProvider: "shopify_ucp",
+        sourceProductId: "gid://shopify/Product/keyboard",
+        sourceVariantId: "gid://shopify/ProductVariant/keyboard-black",
+      }),
+    );
+
+    expect(result.classification).toBe("rejected");
   });
 });

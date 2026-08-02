@@ -39,6 +39,12 @@ export interface CanonicalProductCandidate {
 export type CandidateClassification =
   "exact_verified" | "likely_exact" | "similar" | "incompatible" | "rejected";
 
+// A generic object cannot earn brand, size, or variant points that are not
+// visible, so its best honest visual score is materially lower than a packaged
+// SKU. This threshold authorises presentation as an alternative only; exact
+// and likely-exact policies remain unchanged.
+const SOURCE_BACKED_ALTERNATIVE_MIN_VISUAL_SCORE = 0.42;
+
 export interface CandidateVerification {
   candidateId: string;
   matchedEvidence: Array<{
@@ -337,6 +343,12 @@ export function verifyCandidate(
 
   const exactIdentifierMatch =
     barcodeMatch === true || modelMatch === true || partMatch === true;
+  const sourceBackedVisualAlternative =
+    !fatal &&
+    ["shopify_ucp", "prava_ucp"].includes(candidate.sourceProvider ?? "") &&
+    Boolean(candidate.sourceVariantId) &&
+    candidate.imageSimilarity >= SOURCE_BACKED_ALTERNATIVE_MIN_VISUAL_SCORE &&
+    (textSimilarity >= 0.14 || candidate.retrievalScore >= 0.38);
   const corroboratingFields = new Set(
     matchedEvidence
       .filter(
@@ -356,7 +368,11 @@ export function verifyCandidate(
     corroboratingFields >= 3
   )
     classification = "likely_exact";
-  else if (identityScore >= 0.45) classification = "similar";
+  else if (identityScore >= 0.45 || sourceBackedVisualAlternative)
+    // A visually close, live sellable record may be offered for an explicit
+    // user choice even when the photographed item's exact identity is unknown.
+    // It remains an alternative and never inherits an exact-match claim.
+    classification = "similar";
   else classification = "rejected";
 
   return {

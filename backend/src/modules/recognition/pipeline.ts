@@ -320,6 +320,15 @@ export async function processScan(scanId: string): Promise<void> {
               failedAttempts: discovery.liveCatalog.attempts.filter(
                 (attempt) => attempt.status === "failed",
               ).length,
+              durationMs: discovery.liveCatalog.durationMs,
+              visualQueryCount: discovery.liveCatalog.visualQueries.length,
+              queryKinds: [
+                ...new Set(
+                  discovery.liveCatalog.attempts.map(
+                    (attempt) => attempt.queryKind,
+                  ),
+                ),
+              ],
               routes: [
                 ...new Set(
                   discovery.liveCatalog.attempts.map(
@@ -565,8 +574,8 @@ export async function processScan(scanId: string): Promise<void> {
           errorMessage:
             purchasableOffers.length === 0
               ? offers.length === 0
-                ? "No current India merchant listing is available for this exact product."
-                : "Listings were found, but no exact in-stock variant passed identity, currency, and budget checks."
+                ? "No current India merchant listing is available for the selected product."
+                : "Listings were found, but no in-stock variant passed identity, currency, and budget checks."
               : null,
         });
         return;
