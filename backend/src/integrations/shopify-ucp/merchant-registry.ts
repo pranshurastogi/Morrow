@@ -400,6 +400,7 @@ function relevanceScore(
       observation.subcategory,
       observation.productName,
       ...observation.distinctiveFeatures,
+      ...(observation.visualSearchTerms ?? []),
     ]
       .filter(Boolean)
       .join(" "),
@@ -418,7 +419,17 @@ function relevanceScore(
       "headphones",
       "audio",
     ],
-    ["electronic accessories", "charger", "cable", "power bank", "adapter"],
+    [
+      "electronic accessories",
+      "computer accessories",
+      "computer peripheral",
+      "charger",
+      "cable",
+      "power bank",
+      "adapter",
+      "mouse",
+      "keyboard",
+    ],
     ["clothing", "apparel", "shirt", "dress", "kurta", "trouser"],
     ["footwear", "shoe", "shoes", "sneaker", "sandals"],
     ["jewelry", "jewellery", "necklace", "ring", "earring"],
@@ -426,6 +437,14 @@ function relevanceScore(
     ["makeup cosmetics", "makeup", "cosmetic", "lipstick", "foundation"],
     ["home furniture", "furniture", "mattress", "chair", "sofa"],
     ["home kitchen", "kitchen", "bottle", "cookware", "container"],
+    [
+      "general merchandise",
+      "home appliance",
+      "appliance",
+      "fan",
+      "table fan",
+      "pedestal fan",
+    ],
     [
       "luggage travel accessories",
       "luggage",

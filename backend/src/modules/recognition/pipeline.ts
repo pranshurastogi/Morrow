@@ -19,6 +19,7 @@ import {
 } from "../catalog/catalog-repository";
 import {
   classifyCandidateSet,
+  rankCandidateReferences,
   verifyCandidate,
 } from "../matching/verification";
 import { determineNextCapture } from "../matching/capture-policy";
@@ -344,14 +345,18 @@ export async function processScan(scanId: string): Promise<void> {
         const verifications = candidates.map((candidate) =>
           verifyCandidate(scan.observation!, candidate),
         );
-        await saveCandidateVerifications(scanId, candidates, verifications);
+        await saveCandidateVerifications(
+          scanId,
+          rankCandidateReferences(candidates, verifications),
+          verifications,
+        );
         if (candidates.length === 0) {
           await transitionScan(scanId, "REQUIRES_MORE_EVIDENCE", {
             nextCapture: capture ?? {
-              captureType: "back_label",
-              title: "Show another identifying mark",
+              captureType: "full_object",
+              title: "Add another view for a closer reference",
               message:
-                "No catalogue record can be verified from the current evidence.",
+                "Morrow has described the object, but the current catalogues returned no useful reference. A second angle may surface one.",
             },
           });
           return;
@@ -470,6 +475,7 @@ export async function processScan(scanId: string): Promise<void> {
         const verifications = candidates.map((candidate) =>
           verifyCandidate(scan.observation!, candidate),
         );
+        candidates = rankCandidateReferences(candidates, verifications);
         await saveCandidateVerifications(scanId, candidates, verifications);
         const decision = classifyCandidateSet(verifications);
         if (decision.status === "REQUIRES_MORE_EVIDENCE") {

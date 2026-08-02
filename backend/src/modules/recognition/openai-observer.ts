@@ -14,7 +14,7 @@ import {
   openAiSafetyIdentifier,
 } from "../usage/ai-usage-repository";
 
-const PROMPT_VERSION = "morrow-observer-2026-08-02.2";
+const PROMPT_VERSION = "morrow-observer-2026-08-03.1";
 
 const SYSTEM_INSTRUCTIONS = `You are Morrow's product evidence observer.
 Your only job is to extract claims supported by the supplied image and untrusted evidence.
@@ -24,6 +24,9 @@ Rules:
 - Do not purchase, browse, choose a merchant, calculate approval, or invoke tools.
 - Never invent a brand, model, barcode, size, variant, compatibility, or part number.
 - Use null or an empty list when evidence is unavailable.
+- Always identify the most specific ordinary object family supported by shape and visible components, even when there is no readable text. For example: "wireless computer mouse", "table fan", or "ceramic coffee mug". Do not guess a maker or model.
+- productName is the exact visible sellable name when text supports one; otherwise it is that conservative, vendor-neutral object-family phrase. Record a generic visually inferred productName as probable_inference in claims.
+- visualSearchTerms contains 3–8 short, vendor-neutral retrieval phrases grounded in visible form, components, colour, material, and likely object class. Include the common object name. Never insert an unseen brand, model, compatibility, or specification.
 - A probable visual inference must be labeled probable_inference; it is not direct evidence.
 - exactIdentificationPossible means the visible evidence could uniquely identify a sellable variant, not merely a product family.
 - Compare the full view, object-focused view, and label-focused view as different views of the same evidence; do not count their repeated text as independent proof.
@@ -191,8 +194,8 @@ export function shouldEscalateObservation(
   const strongIdentifier = observation.visibleIdentifiers.some((identifier) =>
     ["barcode", "model_number", "part_number"].includes(identifier.type),
   );
-  const identityCoreVisible = Boolean(
-    observation.brand && observation.productName,
+  const objectFamilyVisible = Boolean(
+    observation.productName || observation.subcategory,
   );
   const variantEvidenceVisible = Boolean(
     observation.size ||
@@ -202,7 +205,7 @@ export function shouldEscalateObservation(
   );
   return (
     !strongIdentifier &&
-    ((!identityCoreVisible && observation.claims.length >= 2) ||
+    ((!objectFamilyVisible && observation.claims.length >= 2) ||
       (observation.exactIdentificationPossible &&
         !variantEvidenceVisible &&
         observation.missingEvidence.length <= 1))

@@ -424,22 +424,7 @@ export function useScanFlow(initialScanId?: string) {
 
   const hydrateReview = useCallback(async (scan: ScanRecord) => {
     const response = await getCandidates(scan.id);
-    const candidates = response.candidates
-      .filter(
-        (candidate) =>
-          candidate.classification === "exact_verified" ||
-          candidate.classification === "likely_exact" ||
-          candidate.classification === "similar",
-      )
-      .slice(0, 4);
-    if (candidates.length === 0) {
-      throw Object.assign(
-        new Error(
-          "The current evidence does not support a safe product choice.",
-        ),
-        { code: "MORE_EVIDENCE_REQUIRED" },
-      );
-    }
+    const candidates = response.candidates.slice(0, 4);
     dispatch({ type: "review", scan, candidates });
   }, []);
 

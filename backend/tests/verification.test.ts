@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ProductObservation } from "../src/domain/product-observation";
 import {
   classifyCandidateSet,
+  rankCandidateReferences,
   type CanonicalProductCandidate,
   verifyCandidate,
 } from "../src/modules/matching/verification";
@@ -25,6 +26,10 @@ const observation: ProductObservation = {
     },
   ],
   distinctiveFeatures: [],
+  visualSearchTerms: [
+    "CeraVe foaming facial cleanser",
+    "white pump bottle green label",
+  ],
   claims: [],
   visualFingerprint: "white pump bottle with green label",
   exactIdentificationPossible: true,
@@ -133,5 +138,52 @@ describe("candidate verification", () => {
       identityScore: first.identityScore - 0.01,
     };
     expect(classifyCandidateSet([first, second]).status).toBe("AMBIGUOUS");
+  });
+
+  test("ranks the closest visual reference first without making it selectable", () => {
+    const textFreeObservation: ProductObservation = {
+      ...observation,
+      category: "computer accessories",
+      subcategory: "computer mouse",
+      brand: null,
+      productName: "wireless computer mouse",
+      variant: null,
+      size: null,
+      visibleIdentifiers: [],
+      visualSearchTerms: ["wireless computer mouse", "black ergonomic mouse"],
+      exactIdentificationPossible: false,
+      missingEvidence: ["brand", "model number"],
+    };
+    const close = candidate({
+      id: "close",
+      category: "computer accessories",
+      brand: null,
+      name: "Wireless Ergonomic Computer Mouse",
+      variant: null,
+      size: null,
+      gtin: null,
+      imageSimilarity: 0.82,
+      retrievalScore: 0.54,
+    });
+    const distant = candidate({
+      id: "distant",
+      category: "lighting",
+      brand: null,
+      name: "Desk Lamp",
+      variant: null,
+      size: null,
+      gtin: null,
+      imageSimilarity: 0.12,
+      retrievalScore: 0.7,
+    });
+    const verifications = [close, distant].map((item) =>
+      verifyCandidate(textFreeObservation, item),
+    );
+    expect(verifications[0]?.classification).toBe("rejected");
+    expect(
+      rankCandidateReferences([distant, close], verifications).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["close", "distant"]);
   });
 });

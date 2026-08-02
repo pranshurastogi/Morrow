@@ -37,6 +37,7 @@ function productSearchText(observation: ProductObservation): string {
     ...observation.colors,
     ...observation.materials,
     ...observation.distinctiveFeatures,
+    ...(observation.visualSearchTerms ?? []),
     observation.visualFingerprint,
     observation.size
       ? `${observation.size.value} ${observation.size.unit}`
@@ -62,7 +63,7 @@ function identifierValues(observation: ProductObservation): string[] {
 }
 
 function compactIdentityText(observation: ProductObservation): string {
-  return [
+  const visibleIdentity = [
     observation.brand,
     observation.productName,
     observation.modelNumber,
@@ -71,6 +72,22 @@ function compactIdentityText(observation: ProductObservation): string {
     observation.size
       ? `${observation.size.value} ${observation.size.unit}`
       : null,
+  ];
+  const hasStrongIdentity = Boolean(
+    observation.brand ||
+    observation.modelNumber ||
+    observation.partNumber ||
+    observation.visibleIdentifiers.length > 0,
+  );
+  return [
+    ...visibleIdentity,
+    ...(!hasStrongIdentity
+      ? [
+          observation.subcategory,
+          observation.category,
+          ...(observation.visualSearchTerms ?? []).slice(0, 5),
+        ]
+      : []),
   ]
     .filter(Boolean)
     .join(" ")
@@ -405,7 +422,7 @@ export async function listCandidatesForUser(
     join scans s on s.id = sc.scan_id
     join canonical_products cp on cp.id = sc.product_id
     where sc.scan_id = ${scanId} and s.user_id = ${userId}
-      and sc.classification in ('exact_verified', 'likely_exact', 'similar')
     order by sc.rank
+    limit 6
   `;
 }

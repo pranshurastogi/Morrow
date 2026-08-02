@@ -38,6 +38,11 @@ const observation: ProductObservation = {
   materials: [],
   visibleIdentifiers: [],
   distinctiveFeatures: [],
+  visualSearchTerms: [
+    "Minimalist niacinamide face serum",
+    "clear dropper bottle",
+    "black label serum",
+  ],
   claims: [],
   visualFingerprint: "clear dropper bottle with a black label",
   exactIdentificationPossible: false,
@@ -56,6 +61,54 @@ describe("Shopify UCP catalogue normalization", () => {
     expect(buildRelaxedCatalogQuery(observation)).toBe(
       "Minimalist Niacinamide 10% Face Serum",
     );
+  });
+
+  test("builds broad visual recall queries for a text-free object", () => {
+    const textFreeMouse: ProductObservation = {
+      ...observation,
+      category: "consumer electronics",
+      subcategory: "computer mouse",
+      brand: null,
+      productName: "wireless computer mouse",
+      size: null,
+      distinctiveFeatures: ["two-button shell with central scroll wheel"],
+      visualSearchTerms: [
+        "wireless computer mouse",
+        "black ergonomic mouse",
+        "scroll wheel",
+      ],
+      visualFingerprint:
+        "black right-handed shell with two main buttons and a central wheel",
+    };
+    expect(buildCatalogQuery(textFreeMouse)).toBe(
+      "wireless computer mouse black ergonomic mouse scroll wheel two-button shell with central scroll wheel",
+    );
+    expect(buildRelaxedCatalogQuery(textFreeMouse)).toBe(
+      "wireless computer mouse",
+    );
+    expect(
+      relevantIndianMerchants(textFreeMouse, 8).some((merchant) =>
+        merchant.category.includes("electronic accessories"),
+      ),
+    ).toBe(true);
+  });
+
+  test("routes a text-free fan toward a general merchandise catalogue", () => {
+    const fan: ProductObservation = {
+      ...observation,
+      category: "home appliance",
+      subcategory: "table fan",
+      brand: null,
+      productName: "table fan",
+      size: null,
+      distinctiveFeatures: ["circular grille", "three blades"],
+      visualSearchTerms: ["table fan", "portable electric fan"],
+    };
+    expect(
+      relevantIndianMerchants(fan, 8).some(
+        (merchant) => merchant.category === "general merchandise",
+      ),
+    ).toBe(true);
   });
 
   test("searches an observed identifier independently from descriptive text", () => {

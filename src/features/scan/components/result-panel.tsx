@@ -20,6 +20,9 @@ import type {
   ScanRecord,
 } from "../api/types";
 import { CameraCaptureDialog } from "./camera-capture-dialog";
+import { candidateMayBeSelected } from "../model/candidate-presentation";
+import { CandidateReferenceCard } from "./candidate-reference-card";
+import { ObservationSummary } from "./observation-summary";
 
 function formatMoney(amountMinor: number, currency: string): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(
@@ -394,78 +397,63 @@ export function AmbiguousPanel({
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const selectableCount = candidates.filter(candidateMayBeSelected).length;
+  const referencesOnly = selectableCount === 0;
+  const objectName =
+    scan.observation?.productName ??
+    scan.observation?.subcategory ??
+    scan.observation?.category ??
+    "this object";
   return (
     <section className="receipt-enter py-5" aria-labelledby="candidate-title">
-      <StatusStamp tone="similar">
-        {scan.status === "SIMILAR_FOUND" ? "Likely match" : "Choice required"}
+      <StatusStamp tone={referencesOnly ? "unverified" : "similar"}>
+        {referencesOnly
+          ? "Visual references"
+          : scan.status === "SIMILAR_FOUND"
+            ? "Likely match"
+            : "Choice required"}
       </StatusStamp>
       <h1 id="candidate-title" className="mt-5 text-3xl leading-tight">
-        {scan.status === "SIMILAR_FOUND"
-          ? "This looks close. You make the final call."
-          : "More than one catalogue record fits."}
+        {referencesOnly
+          ? `Morrow sees ${objectName}.`
+          : scan.status === "SIMILAR_FOUND"
+            ? "This looks close. You make the final call."
+            : "More than one catalogue record fits."}
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-        A chosen match may proceed to merchant comparison, but it will not be
-        relabelled as an exact identifier match.
+        {referencesOnly
+          ? "Morrow kept the nearest catalogue references below. They are useful for orientation, but cannot be purchased as the exact item yet."
+          : "A chosen match may proceed to merchant comparison, but it will not be relabelled as an exact identifier match."}
       </p>
 
-      <div className="mt-5 space-y-3">
+      <ObservationSummary scan={scan} />
+
+      {candidates.length > 0 && (
+        <h2 className="mt-7 font-display text-xl">
+          {referencesOnly ? "Nearest catalogue references" : "Possible matches"}
+        </h2>
+      )}
+      <div className="mt-3 space-y-3">
         {candidates.map((candidate, index) => (
-          <Plate key={candidate.id} className="p-4">
-            <div className="flex gap-3">
-              {candidate.image_url ? (
-                <img
-                  src={candidate.image_url}
-                  alt=""
-                  width={80}
-                  height={80}
-                  className="h-20 w-20 shrink-0 border border-border bg-ivory object-contain p-1"
-                />
-              ) : null}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="label-caps text-muted-foreground">
-                      Candidate {String(index + 1).padStart(2, "0")}
-                    </p>
-                    <h2 className="mt-1 font-display text-lg leading-tight">
-                      {candidate.brand ? `${candidate.brand} ` : ""}
-                      {candidate.name}
-                    </h2>
-                  </div>
-                  <StatusStamp tone="similar">
-                    {candidate.classification === "exact_verified"
-                      ? "Exact evidence"
-                      : candidate.classification === "likely_exact"
-                        ? "Likely"
-                        : "Alternative"}
-                  </StatusStamp>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {[
-                    candidate.variant,
-                    candidate.size_value
-                      ? `${candidate.size_value} ${candidate.size_unit}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ") || "Variant not exposed"}
-                </p>
-                <p className="mt-2 font-mono text-[11px] text-brass">
-                  Identity evidence{" "}
-                  {Number(candidate.identity_score).toFixed(2)}
-                </p>
-              </div>
-            </div>
-            <Button
-              className="mt-4 min-h-11 w-full"
-              onClick={() => onConfirm(candidate.id)}
-            >
-              Use this match
-            </Button>
-          </Plate>
+          <CandidateReferenceCard
+            key={candidate.id}
+            candidate={candidate}
+            index={index}
+            onConfirm={onConfirm}
+          />
         ))}
       </div>
+
+      {candidates.length === 0 && (
+        <Plate className="mt-5 p-4">
+          <p className="font-medium">Object family retained</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            The connected catalogues have not returned a useful listing yet. Add
+            another angle and Morrow will search again with the existing visual
+            read.
+          </p>
+        </Plate>
+      )}
 
       <div className="mt-5 grid gap-2 sm:grid-cols-2">
         <Button

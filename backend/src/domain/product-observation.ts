@@ -53,6 +53,7 @@ export const productObservationSchema = z.object({
   materials: z.array(z.string().max(100)).max(12),
   visibleIdentifiers: z.array(visibleIdentifierSchema).max(20),
   distinctiveFeatures: z.array(z.string().max(240)).max(20),
+  visualSearchTerms: z.array(z.string().min(2).max(100)).min(1).max(10),
   claims: z.array(observationClaimSchema).max(40),
   visualFingerprint: z.string().max(1_000),
   exactIdentificationPossible: z.boolean(),

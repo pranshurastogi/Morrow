@@ -43,12 +43,20 @@ export interface ScanRecord {
   } | null;
   observation: {
     category: string;
+    subcategory: string | null;
     brand: string | null;
     productName: string | null;
     modelNumber: string | null;
     partNumber: string | null;
     variant: string | null;
     size: { value: number; unit: string } | null;
+    colors: string[];
+    materials: string[];
+    distinctiveFeatures: string[];
+    visualSearchTerms: string[];
+    visualFingerprint: string;
+    exactIdentificationPossible: boolean;
+    missingEvidence: string[];
     visibleIdentifiers: Array<{
       type: string;
       value: string;

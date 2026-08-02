@@ -58,6 +58,52 @@ export interface CandidateVerification {
   classification: CandidateClassification;
 }
 
+function mayBeSelected(classification: CandidateClassification): boolean {
+  return ["exact_verified", "likely_exact", "similar"].includes(classification);
+}
+
+/**
+ * Presentation rank keeps a safely selectable candidate above a reference-only
+ * candidate, then uses measured visual evidence to surface the nearest useful
+ * reference. It never changes a verification classification.
+ */
+export function rankCandidateReferences(
+  candidates: CanonicalProductCandidate[],
+  verifications: CandidateVerification[],
+): CanonicalProductCandidate[] {
+  const byId = new Map(
+    verifications.map((verification) => [
+      verification.candidateId,
+      verification,
+    ]),
+  );
+  const score = (candidate: CanonicalProductCandidate): number => {
+    const verification = byId.get(candidate.id);
+    const identityScore = verification?.identityScore ?? 0;
+    const fatalPenalty = verification?.contradictions.some((item) => item.fatal)
+      ? 0.35
+      : 0;
+    return (
+      identityScore * 0.62 +
+      candidate.imageSimilarity * 0.28 +
+      candidate.retrievalScore * 0.1 -
+      fatalPenalty
+    );
+  };
+  return [...candidates].sort((left, right) => {
+    const leftVerification = byId.get(left.id);
+    const rightVerification = byId.get(right.id);
+    const leftSelectable = leftVerification
+      ? mayBeSelected(leftVerification.classification)
+      : false;
+    const rightSelectable = rightVerification
+      ? mayBeSelected(rightVerification.classification)
+      : false;
+    if (leftSelectable !== rightSelectable) return leftSelectable ? -1 : 1;
+    return score(right) - score(left);
+  });
+}
+
 function observationBarcode(observation: ProductObservation): string | null {
   for (const identifier of observation.visibleIdentifiers) {
     if (identifier.type !== "barcode") continue;

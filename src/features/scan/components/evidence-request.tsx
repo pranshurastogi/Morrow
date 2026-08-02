@@ -4,6 +4,7 @@ import { Plate, StatusStamp } from "@/components/morrow/bits";
 import { Button } from "@/components/ui/button";
 import type { ScanRecord } from "../api/types";
 import { CameraCaptureDialog } from "./camera-capture-dialog";
+import { ObservationSummary } from "./observation-summary";
 
 export function EvidenceRequest({
   scan,
@@ -24,6 +25,7 @@ export function EvidenceRequest({
       <h1 id="more-evidence-title" className="mt-5 text-3xl leading-tight">
         {request?.title ?? "Show another identifying mark"}
       </h1>
+      <ObservationSummary scan={scan} />
       <Plate className="mt-5 p-4">
         <div className="flex gap-3">
           <CircleHelp

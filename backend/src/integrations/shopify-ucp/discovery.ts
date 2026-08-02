@@ -36,8 +36,30 @@ interface CatalogQuery {
   query: string;
 }
 
+function distinctPhrases(values: Array<string | null | undefined>): string[] {
+  const selected: string[] = [];
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (!trimmed) continue;
+    const normalized = normalizeText(trimmed);
+    if (!normalized) continue;
+    const alreadyCovered = selected.some((existing) => {
+      const known = normalizeText(existing);
+      return known === normalized || known.includes(normalized);
+    });
+    if (!alreadyCovered) selected.push(trimmed);
+  }
+  return selected;
+}
+
 export function buildCatalogQuery(observation: ProductObservation): string {
-  const terms = [
+  const hasStrongIdentity = Boolean(
+    observation.brand ||
+    observation.modelNumber ||
+    observation.partNumber ||
+    observation.visibleIdentifiers.length > 0,
+  );
+  const terms = distinctPhrases([
     observation.brand,
     observation.productName,
     observation.modelNumber,
@@ -46,16 +68,15 @@ export function buildCatalogQuery(observation: ProductObservation): string {
     observation.size
       ? `${observation.size.value} ${observation.size.unit}`
       : null,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .map((value) => value.trim())
-    .filter(Boolean);
-  if (terms.length === 0) {
-    terms.push(
-      observation.subcategory ?? observation.category,
-      ...observation.distinctiveFeatures.slice(0, 2),
-    );
-  }
+    ...(!hasStrongIdentity
+      ? [
+          observation.subcategory ?? observation.category,
+          ...(observation.visualSearchTerms ?? []).slice(0, 4),
+          ...observation.distinctiveFeatures.slice(0, 2),
+        ]
+      : []),
+  ]);
+  if (terms.length === 0) terms.push(observation.category);
   return terms.join(" ").slice(0, 300);
 }
 
@@ -67,6 +88,9 @@ export function buildRelaxedCatalogQuery(
     observation.productName,
     !observation.productName
       ? (observation.subcategory ?? observation.category)
+      : null,
+    !observation.productName
+      ? (observation.visualSearchTerms?.[0] ?? null)
       : null,
   ]
     .filter((value): value is string => Boolean(value))
