@@ -23,10 +23,21 @@ const lineItemSchema = z.object({
   products: z.array(z.unknown()).default([]),
 });
 
-const paymentResultSchema = z.object({
+const canonicalPaymentStatusSchema = z.enum([
+  "pending",
+  "awaiting_result",
+  "completed",
+  "failed",
+]);
+
+const rawPaymentResultSchema = z.object({
   session_id: z.string(),
   order_id: z.string().nullable(),
-  status: z.enum(["pending", "awaiting_result", "completed", "failed"]),
+  // Prava occasionally exposes an internal progress state (for example
+  // `processing`) while its documented public state is still `pending`.
+  // Parse the provider value first and collapse it into Morrow's conservative
+  // four-state contract below.
+  status: z.string().trim().min(1),
   transactions: z.array(
     z.object({
       txn_id: z.string(),
@@ -61,7 +72,14 @@ const deleteCardResponseSchema = z.object({
 });
 
 export type PravaSession = z.infer<typeof sessionResponseSchema>;
-export type PravaPaymentResult = z.infer<typeof paymentResultSchema>;
+export type PravaPaymentStatus = z.infer<typeof canonicalPaymentStatusSchema>;
+export type PravaPaymentResult = Omit<
+  z.infer<typeof rawPaymentResultSchema>,
+  "status"
+> & {
+  status: PravaPaymentStatus;
+  providerStatus: string;
+};
 export type PravaCard = z.infer<typeof cardSchema>;
 
 export interface CreatePravaSessionInput {
@@ -245,7 +263,85 @@ export async function getPravaPaymentResult(
       cache: "no-store",
     },
   );
-  return paymentResultSchema.parse(body);
+  return parsePravaPaymentResult(body);
+}
+
+const FAILED_PROVIDER_STATUSES = new Set([
+  "failed",
+  "declined",
+  "rejected",
+  "expired",
+  "cancelled",
+  "canceled",
+]);
+
+function normalizedProviderStatus(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function hasCompleteCredential(
+  result: z.infer<typeof rawPaymentResultSchema>,
+): boolean {
+  return result.transactions.some((transaction) =>
+    transaction.line_items.some(
+      (lineItem) =>
+        Boolean(lineItem.token) &&
+        Boolean(lineItem.dynamic_cvv) &&
+        Boolean(lineItem.expiry_month) &&
+        Boolean(lineItem.expiry_year),
+    ),
+  );
+}
+
+/**
+ * Convert Prava's provider state into the intentionally small state machine
+ * consumed by the rest of Morrow. Unknown, non-terminal states are treated as
+ * pending: that is the safe direction because it never starts checkout or
+ * claims success. Credential presence, rather than a display label, is the
+ * authority for moving into `awaiting_result`.
+ */
+export function normalizePravaPaymentStatus(
+  providerStatus: string,
+  credentialPresent: boolean,
+): PravaPaymentStatus {
+  const normalized = normalizedProviderStatus(providerStatus);
+  if (FAILED_PROVIDER_STATUSES.has(normalized)) return "failed";
+  if (normalized === "completed") return "completed";
+  if (credentialPresent || normalized === "awaiting_result") {
+    return "awaiting_result";
+  }
+  return "pending";
+}
+
+export function parsePravaPaymentResult(body: unknown): PravaPaymentResult {
+  const parsed = rawPaymentResultSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new MorrowError({
+      code: "UPSTREAM_UNAVAILABLE",
+      message: "Prava returned an unreadable payment result.",
+      statusCode: 502,
+      retryable: true,
+      details: {
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          code: issue.code,
+        })),
+      },
+    });
+  }
+
+  const providerStatus = parsed.data.status;
+  return {
+    ...parsed.data,
+    status: normalizePravaPaymentStatus(
+      providerStatus,
+      hasCompleteCredential(parsed.data),
+    ),
+    providerStatus,
+  };
 }
 
 export async function listPravaCards(customerId: string): Promise<PravaCard[]> {
@@ -333,7 +429,6 @@ export function extractCheckoutCredential(result: PravaPaymentResult) {
   for (const transaction of result.transactions) {
     for (const lineItem of transaction.line_items) {
       if (
-        lineItem.status === "awaiting_result" &&
         lineItem.token &&
         lineItem.dynamic_cvv &&
         lineItem.expiry_month &&
