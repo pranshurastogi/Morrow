@@ -39,6 +39,7 @@ const environmentSchema = z.object({
   OPENAI_VISION_MODEL: z.string().default("gpt-5.6-terra"),
   OPENAI_ESCALATION_MODEL: z.string().default("gpt-5.6-sol"),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
+  AI_USER_SPEND_LIMIT_USD: z.coerce.number().positive().max(1_000).default(4),
   OPENAI_REASONING_EFFORT: z
     .enum(["none", "low", "medium", "high"])
     .default("low"),

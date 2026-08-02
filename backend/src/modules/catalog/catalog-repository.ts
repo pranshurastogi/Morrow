@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { Sql } from "postgres";
 import { createHash } from "node:crypto";
+import { MorrowError } from "../../common/errors";
 import { getEnvironment } from "../../config/env";
 import {
   normalizedSizeSchema,
@@ -19,6 +20,10 @@ import {
 } from "../recognition/normalization";
 import { getDatabase } from "../../infrastructure/database/client";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
+import {
+  meterOpenAiEmbedding,
+  openAiSafetyIdentifier,
+} from "../usage/ai-usage-repository";
 
 function productSearchText(observation: ProductObservation): string {
   return [
@@ -136,31 +141,51 @@ function mapCandidate(
   };
 }
 
-async function createEmbedding(text: string): Promise<number[] | null> {
+async function createEmbedding(input: {
+  text: string;
+  userId: string;
+  scanId: string | null;
+}): Promise<number[] | null> {
   const env = getEnvironment();
-  if (!env.OPENAI_API_KEY || !text) return null;
-  const normalizedText = text.slice(0, 8_000);
+  if (!env.OPENAI_API_KEY || !input.text) return null;
+  const normalizedText = input.text.slice(0, 8_000);
   const digest = createHash("sha256")
     .update(`${env.OPENAI_EMBEDDING_MODEL}:${normalizedText}`)
     .digest("hex");
-  return rememberJson(`embedding:${digest}`, 30 * 86_400, async () => {
-    const response = await new OpenAI({
-      apiKey: env.OPENAI_API_KEY,
-      maxRetries: 2,
-    }).embeddings.create({
-      model: env.OPENAI_EMBEDDING_MODEL,
-      input: normalizedText,
-      encoding_format: "float",
-      dimensions: 1_536,
+  try {
+    return await rememberJson(`embedding:${digest}`, 30 * 86_400, async () => {
+      const response = await meterOpenAiEmbedding({
+        userId: input.userId,
+        scanId: input.scanId,
+        operation: "catalog_query_embedding",
+        model: env.OPENAI_EMBEDDING_MODEL,
+        request: () =>
+          new OpenAI({
+            apiKey: env.OPENAI_API_KEY,
+            maxRetries: 2,
+          }).embeddings.create({
+            model: env.OPENAI_EMBEDDING_MODEL,
+            input: normalizedText,
+            encoding_format: "float",
+            dimensions: 1_536,
+            user: openAiSafetyIdentifier(input.userId),
+          }),
+      });
+      return response.data[0]?.embedding ?? null;
     });
-    return response.data[0]?.embedding ?? null;
-  });
+  } catch (error) {
+    if (error instanceof MorrowError && error.code === "AI_BUDGET_EXCEEDED") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function retrieveCandidates(
   input: {
     observation: ProductObservation;
     userId: string;
+    scanId?: string;
     preferredProductIds?: string[];
   },
   sql: Sql = getDatabase(),
@@ -169,7 +194,11 @@ export async function retrieveCandidates(
   const query = productSearchText(input.observation);
   const identityQuery = compactIdentityText(input.observation);
   const lexicalQuery = broadLexicalQuery(input.observation);
-  const embeddingPromise = createEmbedding(query);
+  const embeddingPromise = createEmbedding({
+    text: query,
+    userId: input.userId,
+    scanId: input.scanId ?? null,
+  });
 
   const identifierPromise = identifiers.length
     ? sql`

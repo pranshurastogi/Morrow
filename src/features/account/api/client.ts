@@ -1,5 +1,14 @@
 import { apiRequest } from "@/lib/morrow-api";
-import type { AddressInput, PravaCardSummary, UserAddress } from "./types";
+import type {
+  AddressInput,
+  AiUsageSummary,
+  PravaCardSummary,
+  UserAddress,
+} from "./types";
+
+export function getAiUsage(): Promise<AiUsageSummary> {
+  return apiRequest("/account/ai-usage");
+}
 
 export async function listAddresses(): Promise<UserAddress[]> {
   const response = await apiRequest<{ addresses: UserAddress[] }>(

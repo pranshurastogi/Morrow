@@ -27,6 +27,14 @@ R2 image
 
 The first observation uses the lower-latency vision model. A narrow deterministic policy escalates genuinely borderline evidence to the stronger model. Neither model receives tools or purchase authority. Prompt-injection text found by OCR remains inside explicitly untrusted data delimiters.
 
+Every OpenAI request is attributed to the authenticated user in the private
+`ai_usage_events` ledger. The worker records provider-reported input, cached
+input, cache-write, output, reasoning, and total tokens, then prices them from a
+versioned rate card. It atomically reserves a conservative call allowance before
+the request so parallel scan jobs cannot race through the account cap. Set
+`AI_USER_SPEND_LIMIT_USD=4` on both API and worker for the default lifetime
+allowance. The account route exposes only that user's aggregate ledger.
+
 ## Live offer discovery
 
 Morrow searches Shopify Global Catalog and a bounded set of brand/category storefront catalogues in parallel. The India registry contains every supplied physical-goods UCP endpoint; `bun run ucp:probe --all` checks the complete registry without placing an order. A scan queries only the relevant subset to control latency and upstream load, then retries an evidence-preserving relaxed query only when a source returns no products.
@@ -58,7 +66,7 @@ Run migrations from the repository root:
 bun run db:migrate
 ```
 
-The migrations create the evidence ledger, canonical catalogue, product images, merchant listings, candidates, offers, purchase intents, payment sessions, orders, idempotency records, compatibility graph, encrypted delivery records, Cabinet records, and audit events.
+The migrations create the evidence ledger, canonical catalogue, product images, merchant listings, candidates, offers, purchase intents, payment sessions, orders, idempotency records, compatibility graph, encrypted delivery records, model-usage ledger, Cabinet records, and audit events.
 
 ## Adding catalogue data
 

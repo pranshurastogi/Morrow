@@ -14,11 +14,21 @@ import {
   setDefaultUserAddress,
   updateUserAddress,
 } from "../../../modules/account/address-repository";
+import { getAiUsageSummary } from "../../../modules/usage/ai-usage-repository";
 
 const addressParamsSchema = z.object({ id: z.uuid() });
 const cardParamsSchema = z.object({ id: z.string().min(1).max(255) });
 
 export const accountRoutes: FastifyPluginAsync = async (app) => {
+  app.get(
+    "/account/ai-usage",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      reply.header("Cache-Control", "private, no-store");
+      return getAiUsageSummary(request.principal.userId);
+    },
+  );
+
   app.get("/account/addresses", async (request, reply) => {
     reply.header("Cache-Control", "private, no-store");
     return {

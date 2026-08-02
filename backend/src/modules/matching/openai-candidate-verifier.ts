@@ -5,6 +5,11 @@ import { z } from "zod";
 import { getEnvironment } from "../../config/env";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
 import type { CanonicalProductCandidate } from "./verification";
+import {
+  meterOpenAiResponse,
+  openAiSafetyIdentifier,
+  type AiUsageOperation,
+} from "../usage/ai-usage-repository";
 
 const PROMPT_VERSION = "morrow-candidate-comparison-2026-08-02.2";
 const VISUAL_BATCH_SIZE = 3;
@@ -202,9 +207,12 @@ function supportsOriginalImageDetail(model: string): boolean {
 }
 
 async function compareBatch(input: {
+  userId: string;
+  scanId: string;
   scanImages: Array<{ image: Buffer; role: string; sha256: string }>;
   candidates: CanonicalProductCandidate[];
   model: string;
+  operation: AiUsageOperation;
 }): Promise<VisualComparison[]> {
   const digest = createHash("sha256")
     .update(
@@ -230,64 +238,74 @@ async function compareBatch(input: {
     `candidate-comparison:${digest}`,
     30 * 86_400,
     async () => {
-      const response = await getClient().responses.parse({
+      const response = await meterOpenAiResponse({
+        userId: input.userId,
+        scanId: input.scanId,
+        operation: input.operation,
         model: input.model,
-        store: false,
-        reasoning: { effort: getEnvironment().OPENAI_REASONING_EFFORT },
-        input: [
-          { role: "system", content: SYSTEM_INSTRUCTIONS },
-          {
-            role: "user",
-            content: [
+        request: () =>
+          getClient().responses.parse({
+            model: input.model,
+            store: false,
+            service_tier: "default",
+            safety_identifier: openAiSafetyIdentifier(input.userId),
+            max_output_tokens: 6_000,
+            reasoning: { effort: getEnvironment().OPENAI_REASONING_EFFORT },
+            input: [
+              { role: "system", content: SYSTEM_INSTRUCTIONS },
               {
-                type: "input_text",
-                text: "BUYER VIEWS. Full, object-focused, and label-focused views may show the same photograph; repeated marks are one piece of evidence.",
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: "BUYER VIEWS. Full, object-focused, and label-focused views may show the same photograph; repeated marks are one piece of evidence.",
+                  },
+                  ...input.scanImages.flatMap((scanImage) => [
+                    {
+                      type: "input_text" as const,
+                      text: `Buyer view: ${scanImage.role}`,
+                    },
+                    {
+                      type: "input_image" as const,
+                      image_url: `data:image/jpeg;base64,${scanImage.image.toString("base64")}`,
+                      detail:
+                        supportsOriginalImageDetail(input.model) &&
+                        ["label", "barcode"].includes(scanImage.role)
+                          ? ("original" as const)
+                          : ("high" as const),
+                    },
+                  ]),
+                  {
+                    type: "input_text",
+                    text: "CATALOGUE CANDIDATES. Compare each ID only with the buyer views.",
+                  },
+                  ...input.candidates.flatMap((candidate) => [
+                    {
+                      type: "input_text" as const,
+                      text: JSON.stringify({
+                        candidateId: candidate.id,
+                        brand: candidate.brand,
+                        name: candidate.name,
+                        variant: candidate.variant,
+                        size: candidate.size,
+                      }),
+                    },
+                    {
+                      type: "input_image" as const,
+                      image_url: candidate.imageUrl!,
+                      detail: "high" as const,
+                    },
+                  ]),
+                ],
               },
-              ...input.scanImages.flatMap((scanImage) => [
-                {
-                  type: "input_text" as const,
-                  text: `Buyer view: ${scanImage.role}`,
-                },
-                {
-                  type: "input_image" as const,
-                  image_url: `data:image/jpeg;base64,${scanImage.image.toString("base64")}`,
-                  detail:
-                    supportsOriginalImageDetail(input.model) &&
-                    ["label", "barcode"].includes(scanImage.role)
-                      ? ("original" as const)
-                      : ("high" as const),
-                },
-              ]),
-              {
-                type: "input_text",
-                text: "CATALOGUE CANDIDATES. Compare each ID only with the buyer views.",
-              },
-              ...input.candidates.flatMap((candidate) => [
-                {
-                  type: "input_text" as const,
-                  text: JSON.stringify({
-                    candidateId: candidate.id,
-                    brand: candidate.brand,
-                    name: candidate.name,
-                    variant: candidate.variant,
-                    size: candidate.size,
-                  }),
-                },
-                {
-                  type: "input_image" as const,
-                  image_url: candidate.imageUrl!,
-                  detail: "high" as const,
-                },
-              ]),
             ],
-          },
-        ],
-        text: {
-          format: zodTextFormat(
-            visualComparisonSchema,
-            "candidate_visual_comparison",
-          ),
-        },
+            text: {
+              format: zodTextFormat(
+                visualComparisonSchema,
+                "candidate_visual_comparison",
+              ),
+            },
+          }),
       });
       if (!response.output_parsed) {
         throw new Error("The comparison model returned no structured output");
@@ -339,6 +357,8 @@ export interface VisualComparisonReport {
 }
 
 export async function compareCandidatesVisually(input: {
+  userId: string;
+  scanId: string;
   scanImages: Array<{ image: Buffer; role: string; sha256: string }>;
   candidates: CanonicalProductCandidate[];
 }): Promise<{
@@ -369,9 +389,12 @@ export async function compareCandidatesVisually(input: {
   const settled = await Promise.allSettled(
     batches.map((batch) =>
       compareBatch({
+        userId: input.userId,
+        scanId: input.scanId,
         scanImages,
         candidates: batch,
         model: env.OPENAI_VISION_MODEL,
+        operation: "candidate_visual_comparison",
       }),
     ),
   );
@@ -424,9 +447,12 @@ export async function compareCandidatesVisually(input: {
       precisionPassAttempted = true;
       try {
         const precision = await compareBatch({
+          userId: input.userId,
+          scanId: input.scanId,
           scanImages,
           candidates: finalists,
           model: env.OPENAI_ESCALATION_MODEL,
+          operation: "candidate_precision_comparison",
         });
         const finalistIds = new Set(finalists.map((candidate) => candidate.id));
         comparisons.splice(

@@ -9,6 +9,10 @@ import {
 import type { DetectedBarcode } from "./barcode";
 import type { OcrBlock } from "./ocr";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
+import {
+  meterOpenAiResponse,
+  openAiSafetyIdentifier,
+} from "../usage/ai-usage-repository";
 
 const PROMPT_VERSION = "morrow-observer-2026-08-02.2";
 
@@ -84,6 +88,8 @@ function getClient(): OpenAI {
 }
 
 export async function observeProduct(input: {
+  userId: string;
+  scanId: string;
   images: Array<{ image: Buffer; role: string }>;
   ocr: OcrBlock[];
   barcodes: DetectedBarcode[];
@@ -116,37 +122,52 @@ export async function observeProduct(input: {
     `observation:${cacheDigest}`,
     30 * 86_400,
     async () => {
-      const response = await getClient().responses.parse({
+      const response = await meterOpenAiResponse({
+        userId: input.userId,
+        scanId: input.scanId,
+        operation: input.escalate
+          ? "product_observation_escalation"
+          : "product_observation",
         model,
-        store: false,
-        reasoning: { effort: env.OPENAI_REASONING_EFFORT },
-        input: [
-          { role: "system", content: SYSTEM_INSTRUCTIONS },
-          {
-            role: "user",
-            content: [
-              { type: "input_text", text: untrustedEvidenceText(input) },
-              ...input.images.flatMap(({ image, role }) => [
-                { type: "input_text" as const, text: `Image role: ${role}` },
-                {
-                  type: "input_image" as const,
-                  image_url: `data:image/jpeg;base64,${image.toString("base64")}`,
-                  detail: imageDetail({
-                    model,
-                    role,
-                    escalate: Boolean(input.escalate),
-                  }),
-                },
-              ]),
+        request: () =>
+          getClient().responses.parse({
+            model,
+            store: false,
+            service_tier: "default",
+            safety_identifier: openAiSafetyIdentifier(input.userId),
+            max_output_tokens: 4_000,
+            reasoning: { effort: env.OPENAI_REASONING_EFFORT },
+            input: [
+              { role: "system", content: SYSTEM_INSTRUCTIONS },
+              {
+                role: "user",
+                content: [
+                  { type: "input_text", text: untrustedEvidenceText(input) },
+                  ...input.images.flatMap(({ image, role }) => [
+                    {
+                      type: "input_text" as const,
+                      text: `Image role: ${role}`,
+                    },
+                    {
+                      type: "input_image" as const,
+                      image_url: `data:image/jpeg;base64,${image.toString("base64")}`,
+                      detail: imageDetail({
+                        model,
+                        role,
+                        escalate: Boolean(input.escalate),
+                      }),
+                    },
+                  ]),
+                ],
+              },
             ],
-          },
-        ],
-        text: {
-          format: zodTextFormat(
-            productObservationSchema,
-            "product_observation",
-          ),
-        },
+            text: {
+              format: zodTextFormat(
+                productObservationSchema,
+                "product_observation",
+              ),
+            },
+          }),
       });
       if (!response.output_parsed)
         throw new Error("The observation model returned no structured output");

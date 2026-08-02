@@ -20,6 +20,7 @@ export interface CandidateDiscoveryResult {
 export async function discoverProductCandidates(input: {
   observation: ProductObservation;
   userId: string;
+  scanId: string;
   countryCode: string;
   currency: string;
 }): Promise<CandidateDiscoveryResult> {
@@ -27,6 +28,7 @@ export async function discoverProductCandidates(input: {
     retrieveCandidates({
       observation: input.observation,
       userId: input.userId,
+      scanId: input.scanId,
     }),
     discoverUcpCatalog({
       observation: input.observation,
@@ -55,6 +57,7 @@ export async function discoverProductCandidates(input: {
     candidates = await retrieveCandidates({
       observation: input.observation,
       userId: input.userId,
+      scanId: input.scanId,
       preferredProductIds: discoveredProductIds,
     });
   }

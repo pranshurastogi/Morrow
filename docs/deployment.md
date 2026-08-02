@@ -31,6 +31,11 @@ Create PostgreSQL and Redis services, then create two services from this reposit
 
 The API service runs migrations before deployment. Both services build from the root Bun lockfile. Give the worker OpenAI, R2, database, Redis, Prava, and account-data-encryption variables. Give the API R2, database, Redis, Prava, auth, session-encryption, and account-data-encryption variables. `ACCOUNT_DATA_ENCRYPTION_KEY` must be the same base64-encoded 32-byte value on both services and must differ from `SESSION_TOKEN_ENCRYPTION_KEY`. Only the worker should receive the restricted merchant checkout executor secret.
 
+Set `AI_USER_SPEND_LIMIT_USD=4` on both API and worker. The API blocks new
+uploads and inspections when the account lacks enough allowance; the worker
+also reserves budget atomically before every OpenAI request. Usage is settled
+from provider-reported token counts and shown in the private account ledger.
+
 Set these on both the API and worker for live catalogue discovery and user-initiated offer refreshes:
 
 ```text

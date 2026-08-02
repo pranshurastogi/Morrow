@@ -16,6 +16,7 @@ import {
 import { enqueueScan } from "../../../infrastructure/queue/queues";
 import { assertStoredObject } from "../../../infrastructure/storage/r2";
 import { listCandidatesForUser } from "../../../modules/catalog/catalog-repository";
+import { assertAiBudgetCanStart } from "../../../modules/usage/ai-usage-repository";
 import { eventStreamHeaders } from "../event-stream";
 
 const idParamsSchema = z.object({ scanId: z.uuid() });
@@ -56,6 +57,7 @@ export const scanRoutes: FastifyPluginAsync = async (app) => {
         details: { issues: parsed.error.issues },
       });
     }
+    await assertAiBudgetCanStart(request.principal.userId);
     const uploadIds = parsed.data.images.map((image) => image.uploadId);
     const uploads = await getUploadsForUser(
       uploadIds,
@@ -121,6 +123,8 @@ export const scanRoutes: FastifyPluginAsync = async (app) => {
           .max(4),
       })
       .parse(request.body);
+    await getScanForUser(params.scanId, request.principal.userId);
+    await assertAiBudgetCanStart(request.principal.userId);
     const uploadIds = body.images.map((image) => image.uploadId);
     const uploads = await getUploadsForUser(
       uploadIds,
@@ -197,6 +201,7 @@ export const scanRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    await assertAiBudgetCanStart(request.principal.userId);
     const retrying = await clearScanErrorForRetry({
       scanId: scan.id,
       userId: request.principal.userId,

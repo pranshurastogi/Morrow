@@ -3,6 +3,7 @@ import { useUser } from "@clerk/tanstack-react-start";
 import { Link } from "@tanstack/react-router";
 import {
   CreditCard,
+  Gauge,
   Fingerprint,
   MapPin,
   Pencil,
@@ -29,6 +30,7 @@ import {
   createAddress,
   deleteAddress,
   deleteCard,
+  getAiUsage,
   listAddresses,
   listCards,
   setDefaultAddress,
@@ -39,6 +41,7 @@ import { AddressEditorDialog } from "./address-editor-dialog";
 
 const addressQueryKey = ["account", "addresses"] as const;
 const cardQueryKey = ["account", "prava-cards"] as const;
+const usageQueryKey = ["account", "recognition-usage"] as const;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error
@@ -49,6 +52,19 @@ function errorMessage(error: unknown): string {
 function cardLabel(brand: string | null): string {
   if (!brand) return "Card";
   return brand.charAt(0).toUpperCase() + brand.slice(1);
+}
+
+function formatTokens(tokens: number): string {
+  return new Intl.NumberFormat("en-US", { notation: "compact" }).format(tokens);
+}
+
+function formatUsd(microUsd: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: microUsd < 10_000 ? 6 : 4,
+  }).format(microUsd / 1_000_000);
 }
 
 export function AccountDesk() {
@@ -66,6 +82,11 @@ export function AccountDesk() {
   const cards = useQuery({
     queryKey: cardQueryKey,
     queryFn: listCards,
+    retry: 1,
+  });
+  const usage = useQuery({
+    queryKey: usageQueryKey,
+    queryFn: getAiUsage,
     retry: 1,
   });
 
@@ -162,6 +183,143 @@ export function AccountDesk() {
             </p>
           </div>
         </Plate>
+
+        <section className="mt-8" aria-labelledby="usage-title">
+          <div className="border-b border-border pb-3">
+            <VintageLabel>Recognition ledger</VintageLabel>
+            <h2 id="usage-title" className="mt-2 font-display text-2xl">
+              Inspection allowance
+            </h2>
+          </div>
+
+          {usage.isLoading && (
+            <Plate className="mt-3 p-5 text-center">
+              <p className="mono-caps text-muted-foreground" role="status">
+                Totalling the model ledger
+              </p>
+            </Plate>
+          )}
+          {usage.error && (
+            <Plate className="mt-3 border-postal/45 p-4">
+              <p className="text-sm text-postal" role="alert">
+                {errorMessage(usage.error)}
+              </p>
+            </Plate>
+          )}
+          {usage.data && (
+            <Plate className="mt-3 overflow-hidden p-0">
+              <div className="flex items-start justify-between gap-3 border-b border-border bg-secondary/45 p-4">
+                <div className="flex min-w-0 gap-3">
+                  <Gauge
+                    className="mt-0.5 h-6 w-6 shrink-0 text-primary"
+                    aria-hidden
+                  />
+                  <div>
+                    <p className="font-medium">
+                      {formatUsd(usage.data.usedMicroUsd)} used
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {formatUsd(usage.data.remainingMicroUsd)} remains from a{" "}
+                      {formatUsd(usage.data.limitMicroUsd)} account limit.
+                    </p>
+                  </div>
+                </div>
+                <StatusStamp
+                  tone={usage.data.canStartInspection ? "verified" : "postal"}
+                >
+                  {usage.data.canStartInspection
+                    ? "Available"
+                    : "Limit reached"}
+                </StatusStamp>
+              </div>
+
+              <div className="p-4">
+                <div
+                  className="h-2 overflow-hidden border border-brass/45 bg-ivory"
+                  role="progressbar"
+                  aria-label="Recognition allowance used"
+                  aria-valuemin={0}
+                  aria-valuemax={usage.data.limitMicroUsd}
+                  aria-valuenow={Math.min(
+                    usage.data.usedMicroUsd + usage.data.reservedMicroUsd,
+                    usage.data.limitMicroUsd,
+                  )}
+                >
+                  <div
+                    className="h-full bg-primary transition-[width] duration-500 motion-reduce:transition-none"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        ((usage.data.usedMicroUsd +
+                          usage.data.reservedMicroUsd) /
+                          usage.data.limitMicroUsd) *
+                          100,
+                      )}%`,
+                    }}
+                  />
+                </div>
+
+                <dl className="mt-4 grid grid-cols-3 gap-3 border-y border-border py-3 text-center">
+                  <div>
+                    <dt className="mono-caps text-muted-foreground">Tokens</dt>
+                    <dd className="mt-1 font-display text-xl">
+                      {formatTokens(usage.data.totalTokens)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="mono-caps text-muted-foreground">Input</dt>
+                    <dd className="mt-1 font-display text-xl">
+                      {formatTokens(usage.data.inputTokens)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="mono-caps text-muted-foreground">Output</dt>
+                    <dd className="mt-1 font-display text-xl">
+                      {formatTokens(usage.data.outputTokens)}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="mt-4 space-y-2">
+                  <p className="mono-caps text-muted-foreground">
+                    Models on duty
+                  </p>
+                  <p className="font-mono text-[11px] leading-relaxed text-foreground">
+                    Primary {usage.data.primaryModel} · escalation{" "}
+                    {usage.data.escalationModel} · retrieval{" "}
+                    {usage.data.embeddingModel}
+                  </p>
+                  {usage.data.models.some((model) => model.requests > 0) && (
+                    <ul className="divide-y divide-border border-y border-border">
+                      {usage.data.models
+                        .filter((model) => model.requests > 0)
+                        .map((model) => (
+                          <li
+                            key={model.model}
+                            className="flex items-center justify-between gap-3 py-2"
+                          >
+                            <span className="min-w-0 truncate font-mono text-[11px]">
+                              {model.model}
+                            </span>
+                            <span className="shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+                              {formatTokens(model.totalTokens)} tokens ·{" "}
+                              {formatUsd(model.costMicroUsd)}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Totals come from provider-reported usage, including{" "}
+                    {formatTokens(usage.data.cachedInputTokens)} cached-input
+                    tokens. Reused Morrow results do not create another model
+                    charge.
+                  </p>
+                </div>
+              </div>
+            </Plate>
+          )}
+        </section>
 
         <section className="mt-8" aria-labelledby="address-title">
           <div className="flex items-end justify-between gap-3 border-b border-border pb-3">

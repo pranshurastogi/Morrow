@@ -7,6 +7,7 @@ import {
   createPresignedUpload,
   createUploadObjectKey,
 } from "../../../infrastructure/storage/r2";
+import { assertAiBudgetCanStart } from "../../../modules/usage/ai-usage-repository";
 
 const bodySchema = z.object({
   mimeType: z.enum([
@@ -29,6 +30,7 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
         details: { issues: parsed.error.issues },
       });
     }
+    await assertAiBudgetCanStart(request.principal.userId);
     const env = getEnvironment();
     const objectKey = createUploadObjectKey(
       request.principal.userId,

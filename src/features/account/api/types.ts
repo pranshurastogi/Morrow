@@ -27,3 +27,37 @@ export interface PravaCardSummary {
   status: "active" | "deleted";
   createdAt: string;
 }
+
+export interface AiUsageModelSummary {
+  model: string;
+  requests: number;
+  costMicroUsd: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
+}
+
+export interface AiUsageSummary {
+  period: "lifetime";
+  limitMicroUsd: number;
+  usedMicroUsd: number;
+  reservedMicroUsd: number;
+  remainingMicroUsd: number;
+  requests: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
+  canStartInspection: boolean;
+  primaryModel: string;
+  escalationModel: string;
+  embeddingModel: string;
+  pricingVersion: string;
+  pricingSource: string;
+  models: AiUsageModelSummary[];
+}

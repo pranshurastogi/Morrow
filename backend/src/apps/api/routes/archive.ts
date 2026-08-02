@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { getScanForUser } from "../../../infrastructure/database/scan-repository";
 import { enqueueScan } from "../../../infrastructure/queue/queues";
 import {
   createArchiveRepeat,
   listArchiveDossiers,
 } from "../../../modules/archive/archive-repository";
+import { assertAiBudgetCanStart } from "../../../modules/usage/ai-usage-repository";
 
 const paramsSchema = z.object({ scanId: z.uuid() });
 const repeatSchema = z.object({
@@ -25,6 +27,8 @@ export const archiveRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const params = paramsSchema.parse(request.params);
       const body = repeatSchema.parse(request.body);
+      await getScanForUser(params.scanId, request.principal.userId);
+      await assertAiBudgetCanStart(request.principal.userId);
       const repeat = await createArchiveRepeat({
         sourceScanId: params.scanId,
         userId: request.principal.userId,

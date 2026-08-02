@@ -159,6 +159,8 @@ async function extractObservation(scanId: string) {
   const ocr = preparedImages.flatMap((item) => item.ocr);
   const preparationDurationMs = Date.now() - extractionStartedAt;
   let result = await observeProduct({
+    userId: scan.userId,
+    scanId: scan.id,
     images: observationViews(preparedImages),
     ocr,
     barcodes,
@@ -166,14 +168,28 @@ async function extractObservation(scanId: string) {
     countryCode: scan.countryCode,
   });
   if (shouldEscalateObservation(result.observation)) {
-    result = await observeProduct({
-      images: observationViews(preparedImages),
-      ocr,
-      barcodes,
-      mode: scan.mode,
-      countryCode: scan.countryCode,
-      escalate: true,
-    });
+    try {
+      result = await observeProduct({
+        userId: scan.userId,
+        scanId: scan.id,
+        images: observationViews(preparedImages),
+        ocr,
+        barcodes,
+        mode: scan.mode,
+        countryCode: scan.countryCode,
+        escalate: true,
+      });
+    } catch (error) {
+      if (toMorrowError(error).code !== "AI_BUDGET_EXCEEDED") throw error;
+      await writeAuditEvent({
+        userId: scan.userId,
+        entityType: "scan",
+        entityId: scan.id,
+        eventType: "AI_ESCALATION_SKIPPED_BUDGET",
+        actorType: "policy",
+        payload: { retainedModel: result.model },
+      });
+    }
   }
   const observation = mergeDeterministicBarcodes(result.observation, barcodes);
 
@@ -280,6 +296,7 @@ export async function processScan(scanId: string): Promise<void> {
         const discovery = await discoverProductCandidates({
           observation: scan.observation,
           userId: scan.userId,
+          scanId: scan.id,
           countryCode: scan.countryCode ?? "IN",
           currency: scan.currency ?? "INR",
         });
@@ -353,6 +370,7 @@ export async function processScan(scanId: string): Promise<void> {
           candidates = await retrieveCandidates({
             observation: scan.observation,
             userId: scan.userId,
+            scanId: scan.id,
           });
         }
         const preparedImages = (await getScanImages(scanId))
@@ -412,6 +430,8 @@ export async function processScan(scanId: string): Promise<void> {
               }),
             );
             const visualComparison = await compareCandidatesVisually({
+              userId: scan.userId,
+              scanId: scan.id,
               scanImages: scanImages.flat(),
               candidates,
             });
@@ -481,6 +501,7 @@ export async function processScan(scanId: string): Promise<void> {
           const refreshed = await discoverProductCandidates({
             observation: scan.observation,
             userId: scan.userId,
+            scanId: scan.id,
             countryCode: scan.countryCode ?? "IN",
             currency: scan.currency ?? "INR",
           });
