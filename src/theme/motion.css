@@ -213,6 +213,61 @@
   }
 }
 
+@keyframes inspection-aperture-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes inspection-sweep-pass {
+  0% {
+    opacity: 0;
+    transform: translateY(-3.25rem);
+  }
+  14%,
+  78% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(3.25rem);
+  }
+}
+
+@keyframes inspection-copy-feed {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-7px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes inspection-current-proof {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.63 0.077 74.6 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px oklch(0.63 0.077 74.6 / 0.18);
+  }
+}
+
+@keyframes field-note-feed {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @utility animate-stamp {
   animation: stamp-press 0.6s cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }

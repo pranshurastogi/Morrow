@@ -344,3 +344,226 @@
 .sandbox-milestone-active > span:first-child {
   animation: secure-dial-breathe 1.6s ease-in-out infinite;
 }
+
+.inspection-story {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--ivory);
+  box-shadow: 0 12px 28px -27px var(--ink);
+}
+
+.inspection-machine {
+  position: relative;
+  display: grid;
+  grid-template-columns: 8.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  min-height: 16.5rem;
+  padding: 1.5rem 1.25rem;
+  border-bottom: 3px double var(--brass);
+  background-color: var(--parchment);
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 22px,
+    oklch(0.229 0.008 67.5 / 0.045) 22px 23px
+  );
+}
+
+.inspection-machine::after {
+  content: "";
+  position: absolute;
+  inset: 0.7rem;
+  pointer-events: none;
+  border: 1px solid oklch(0.63 0.077 74.6 / 0.35);
+}
+
+.inspection-aperture {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 7.5rem;
+  height: 7.5rem;
+  place-items: center;
+  border: 3px double var(--brass);
+  border-radius: 999px;
+  background: var(--ivory);
+  box-shadow:
+    inset 0 0 0 8px var(--parchment),
+    0 9px 18px -16px var(--ink);
+}
+
+.inspection-aperture-ring {
+  position: absolute;
+  width: 6.15rem;
+  height: 6.15rem;
+  color: oklch(0.63 0.077 74.6 / 0.55);
+  stroke-width: 0.7;
+  animation: inspection-aperture-turn 5.8s linear infinite;
+}
+
+.inspection-object-mark {
+  display: grid;
+  width: 3.35rem;
+  height: 3.35rem;
+  place-items: center;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  color: var(--primary);
+  background: var(--parchment);
+}
+
+.inspection-object-mark svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  stroke-width: 1.5;
+}
+
+.inspection-sweep {
+  position: absolute;
+  width: 5.35rem;
+  height: 1px;
+  background: var(--postal);
+  animation: inspection-sweep-pass 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.inspection-story-copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  animation: inspection-copy-feed 520ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+}
+
+.inspection-finding {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.inspection-finding svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: 0 0 auto;
+  margin-top: 0.05rem;
+}
+
+.inspection-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 1rem 0.65rem;
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspection-track-step {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.inspection-track-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 0.8rem;
+  left: calc(50% + 0.85rem);
+  width: calc(100% - 1.7rem);
+  height: 1px;
+  background: var(--border);
+}
+
+.inspection-track-step[data-state="complete"]:not(:last-child)::after {
+  background: var(--primary);
+}
+
+.inspection-track-mark {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--ivory);
+}
+
+.inspection-track-mark svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.inspection-track-step[data-state="complete"] {
+  color: var(--primary);
+}
+
+.inspection-track-step[data-state="complete"] .inspection-track-mark {
+  border-color: var(--primary);
+}
+
+.inspection-track-step[data-state="current"] {
+  color: var(--foreground);
+}
+
+.inspection-track-step[data-state="current"] .inspection-track-mark {
+  border-color: var(--brass);
+  color: var(--primary);
+  animation: inspection-current-proof 1.8s ease-in-out infinite;
+}
+
+.inspection-fact {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+  min-height: 5.8rem;
+  padding: 1rem;
+  background: oklch(0.972 0.019 88.5 / 0.58);
+}
+
+.inspection-fact > svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-top: 0.15rem;
+  color: var(--brass);
+  stroke-width: 1.4;
+}
+
+.inspection-fact-slip {
+  animation: field-note-feed 420ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+}
+
+@media (max-width: 420px) {
+  .inspection-machine {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 1rem;
+    min-height: 22rem;
+    padding: 1.35rem 1.15rem;
+    text-align: center;
+  }
+
+  .inspection-story-copy {
+    max-width: 19rem;
+  }
+
+  .inspection-finding {
+    justify-content: center;
+    text-align: left;
+  }
+
+  .inspection-track-step {
+    font-size: 0.52rem;
+    letter-spacing: 0;
+  }
+}

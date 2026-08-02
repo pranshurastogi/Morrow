@@ -113,7 +113,7 @@ function AuthenticatedScanDesk() {
           <CapturePanel onFile={(file) => void actions.startScan(file)} />
         )}
         {(stage === "uploading" || stage === "inspecting") && (
-          <ProgressPanel stage={stage} />
+          <ProgressPanel stage={stage} scan={scan} />
         )}
         {stage === "more_evidence" && scan && (
           <EvidenceRequest
