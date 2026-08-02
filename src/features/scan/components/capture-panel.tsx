@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   Camera,
   Focus,
@@ -8,14 +8,15 @@ import {
 } from "lucide-react";
 import { Plate, SectionKicker } from "@/components/morrow/bits";
 import { Button } from "@/components/ui/button";
+import { CameraCaptureDialog } from "./camera-capture-dialog";
 
 interface CapturePanelProps {
   onFile: (file: File) => void;
 }
 
 export function CapturePanel({ onFile }: CapturePanelProps) {
-  const cameraInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   return (
     <section className="animate-slip" aria-labelledby="capture-title">
@@ -44,25 +45,20 @@ export function CapturePanel({ onFile }: CapturePanelProps) {
           <Button
             size="lg"
             className="min-h-12 w-full text-base active:translate-y-px"
-            onClick={() => cameraInput.current?.click()}
+            onClick={() => setCameraOpen(true)}
           >
             <Camera className="mr-2 h-5 w-5" aria-hidden />
             Scan an object
           </Button>
-          <input
-            ref={cameraInput}
-            className="sr-only"
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            capture="environment"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              if (file) onFile(file);
-              event.currentTarget.value = "";
-            }}
-          />
         </div>
       </Plate>
+
+      <CameraCaptureDialog
+        open={cameraOpen}
+        onOpenChange={setCameraOpen}
+        onCapture={onFile}
+        onChooseFile={() => imageInput.current?.click()}
+      />
 
       <Button
         variant="outline"

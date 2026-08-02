@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   Camera,
   Check,
@@ -19,6 +19,7 @@ import type {
   Offer,
   ScanRecord,
 } from "../api/types";
+import { CameraCaptureDialog } from "./camera-capture-dialog";
 
 function formatMoney(amountMinor: number, currency: string): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(
@@ -392,6 +393,7 @@ export function AmbiguousPanel({
   onReset: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   return (
     <section className="receipt-enter py-5" aria-labelledby="candidate-title">
       <StatusStamp tone="similar">
@@ -469,7 +471,7 @@ export function AmbiguousPanel({
         <Button
           variant="outline"
           className="min-h-11"
-          onClick={() => input.current?.click()}
+          onClick={() => setCameraOpen(true)}
         >
           <Camera className="mr-2 h-4 w-4" aria-hidden />
           Add clearer evidence
@@ -483,12 +485,18 @@ export function AmbiguousPanel({
         className="sr-only"
         type="file"
         accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-        capture="environment"
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           if (file) onEvidence(file);
           event.currentTarget.value = "";
         }}
+      />
+      <CameraCaptureDialog
+        open={cameraOpen}
+        onOpenChange={setCameraOpen}
+        onCapture={onEvidence}
+        onChooseFile={() => input.current?.click()}
+        title="Capture clearer evidence"
       />
     </section>
   );

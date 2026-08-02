@@ -1,8 +1,9 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Camera, CircleHelp } from "lucide-react";
 import { Plate, StatusStamp } from "@/components/morrow/bits";
 import { Button } from "@/components/ui/button";
 import type { ScanRecord } from "../api/types";
+import { CameraCaptureDialog } from "./camera-capture-dialog";
 
 export function EvidenceRequest({
   scan,
@@ -12,6 +13,7 @@ export function EvidenceRequest({
   onFile: (file: File) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const request = scan.nextCapture;
   return (
     <section
@@ -36,7 +38,7 @@ export function EvidenceRequest({
       </Plate>
       <Button
         className="mt-5 min-h-12 w-full text-base"
-        onClick={() => input.current?.click()}
+        onClick={() => setCameraOpen(true)}
       >
         <Camera className="mr-2 h-5 w-5" aria-hidden />
         Add evidence
@@ -46,12 +48,18 @@ export function EvidenceRequest({
         className="sr-only"
         type="file"
         accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-        capture="environment"
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           if (file) onFile(file);
           event.currentTarget.value = "";
         }}
+      />
+      <CameraCaptureDialog
+        open={cameraOpen}
+        onOpenChange={setCameraOpen}
+        onCapture={onFile}
+        onChooseFile={() => input.current?.click()}
+        title={request?.title ?? "Capture another identifying mark"}
       />
     </section>
   );
