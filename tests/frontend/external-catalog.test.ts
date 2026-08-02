@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { ScanRecord } from "../api/types";
+import type { ScanRecord } from "../../src/features/scan/api/types";
 import {
   buildExternalCatalogLinks,
   buildExternalCatalogQuery,
-} from "./external-catalog";
+} from "../../src/features/scan/model/external-catalog";
 
 const scan: ScanRecord = {
   id: "scan-reference",

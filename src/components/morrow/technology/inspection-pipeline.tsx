@@ -120,7 +120,7 @@ const stages: PipelineStage[] = [
 
 export function InspectionPipeline() {
   const [activeIndex, setActiveIndex] = useState(0);
-  const active = stages[activeIndex];
+  const active = stages[activeIndex] ?? stages[0]!;
 
   return (
     <section id="pipeline" className="border-y border-border bg-card">

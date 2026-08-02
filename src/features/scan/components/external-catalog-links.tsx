@@ -17,7 +17,10 @@ export function ExternalCatalogLinks({
   candidate?: Candidate | null;
   className?: string;
 }) {
-  const query = buildExternalCatalogQuery({ scan, candidate });
+  const query = buildExternalCatalogQuery({
+    scan,
+    ...(candidate === undefined ? {} : { candidate }),
+  });
   const links = buildExternalCatalogLinks(query);
   if (links.length === 0) return null;
 

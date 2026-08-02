@@ -79,14 +79,18 @@ export function SectionKicker({
 export function Plate({
   children,
   className,
+  id,
   as: Tag = "div",
 }: {
   children: ReactNode;
   className?: string;
+  id?: string;
   as?: "div" | "li" | "article" | "section";
 }) {
   return (
-    <Tag className={cn("plate rounded-sm bg-card", className)}>{children}</Tag>
+    <Tag id={id} className={cn("plate rounded-sm bg-card", className)}>
+      {children}
+    </Tag>
   );
 }
 
