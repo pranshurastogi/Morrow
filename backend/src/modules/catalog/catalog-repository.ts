@@ -14,6 +14,8 @@ import {
   jaccardSimilarity,
   normalizeBarcode,
   normalizeIdentifier,
+  normalizeText,
+  tokenize,
 } from "../recognition/normalization";
 import { getDatabase } from "../../infrastructure/database/client";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
@@ -52,6 +54,31 @@ function identifierValues(observation: ProductObservation): string[] {
   if (observation.partNumber)
     identifiers.push(normalizeIdentifier(observation.partNumber));
   return [...new Set(identifiers)];
+}
+
+function compactIdentityText(observation: ProductObservation): string {
+  return [
+    observation.brand,
+    observation.productName,
+    observation.modelNumber,
+    observation.partNumber,
+    observation.variant,
+    observation.size
+      ? `${observation.size.value} ${observation.size.unit}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 500);
+}
+
+function broadLexicalQuery(observation: ProductObservation): string {
+  const stopWords = new Set(["and", "for", "the", "with", "pack", "product"]);
+  return [...tokenize(compactIdentityText(observation))]
+    .map((token) => normalizeText(token))
+    .filter((token) => token.length > 1 && !stopWords.has(token))
+    .slice(0, 18)
+    .join(" | ");
 }
 
 function mapCandidate(
@@ -124,6 +151,7 @@ async function createEmbedding(text: string): Promise<number[] | null> {
       model: env.OPENAI_EMBEDDING_MODEL,
       input: normalizedText,
       encoding_format: "float",
+      dimensions: 1_536,
     });
     return response.data[0]?.embedding ?? null;
   });
@@ -139,6 +167,8 @@ export async function retrieveCandidates(
 ): Promise<CanonicalProductCandidate[]> {
   const identifiers = identifierValues(input.observation);
   const query = productSearchText(input.observation);
+  const identityQuery = compactIdentityText(input.observation);
+  const lexicalQuery = broadLexicalQuery(input.observation);
   const embeddingPromise = createEmbedding(query);
 
   const identifierPromise = identifiers.length
@@ -150,11 +180,19 @@ export async function retrieveCandidates(
         limit 20
       `
     : Promise.resolve([]);
-  const textPromise = query
+  const strictTextPromise = identityQuery
     ? sql`
-        select *, ts_rank(search_vector, websearch_to_tsquery('simple', ${query}))::float as retrieval_score
+        select *, ts_rank_cd(search_vector, websearch_to_tsquery('simple', ${identityQuery}))::float as retrieval_score
         from canonical_products
-        where search_vector @@ websearch_to_tsquery('simple', ${query})
+        where search_vector @@ websearch_to_tsquery('simple', ${identityQuery})
+        order by retrieval_score desc limit 30
+      `
+    : Promise.resolve([]);
+  const broadTextPromise = lexicalQuery
+    ? sql`
+        select *, ts_rank_cd(search_vector, to_tsquery('simple', ${lexicalQuery}))::float as retrieval_score
+        from canonical_products
+        where search_vector @@ to_tsquery('simple', ${lexicalQuery})
         order by retrieval_score desc limit 30
       `
     : Promise.resolve([]);
@@ -173,14 +211,21 @@ export async function retrieveCandidates(
       `
     : Promise.resolve([]);
 
-  const [identifierRows, textRows, historyRows, preferredRows, embedding] =
-    await Promise.all([
-      identifierPromise,
-      textPromise,
-      historyPromise,
-      preferredPromise,
-      embeddingPromise,
-    ]);
+  const [
+    identifierRows,
+    strictTextRows,
+    broadTextRows,
+    historyRows,
+    preferredRows,
+    embedding,
+  ] = await Promise.all([
+    identifierPromise,
+    strictTextPromise,
+    broadTextPromise,
+    historyPromise,
+    preferredPromise,
+    embeddingPromise,
+  ]);
   const vectorRows = embedding
     ? await sql`
         select *, (1 - (text_embedding <=> ${`[${embedding.join(",")}]`}::vector))::float as retrieval_score
@@ -217,8 +262,9 @@ export async function retrieveCandidates(
     }
   };
   ingest(identifierRows, 1);
-  ingest(preferredRows, 0.5);
-  ingest(textRows, 0.72);
+  ingest(preferredRows, 0.78);
+  ingest(strictTextRows, 0.78);
+  ingest(broadTextRows, 0.5);
   ingest(vectorRows, 0.62);
   ingest(historyRows, 0.8, true);
 

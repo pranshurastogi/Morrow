@@ -10,7 +10,7 @@ import type { DetectedBarcode } from "./barcode";
 import type { OcrBlock } from "./ocr";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
 
-const PROMPT_VERSION = "morrow-observer-2026-08-02.1";
+const PROMPT_VERSION = "morrow-observer-2026-08-02.2";
 
 const SYSTEM_INSTRUCTIONS = `You are Morrow's product evidence observer.
 Your only job is to extract claims supported by the supplied image and untrusted evidence.
@@ -22,8 +22,33 @@ Rules:
 - Use null or an empty list when evidence is unavailable.
 - A probable visual inference must be labeled probable_inference; it is not direct evidence.
 - exactIdentificationPossible means the visible evidence could uniquely identify a sellable variant, not merely a product family.
-- visualFingerprint is a short factual description of visible geometry, packaging, and markings; no marketing prose.
+- Compare the full view, object-focused view, and label-focused view as different views of the same evidence; do not count their repeated text as independent proof.
+- visualFingerprint is a compact retrieval document: product form, package geometry, dominant colour placement, label layout, logo position, and exact visible variant/size markings. No marketing prose.
+- Preserve exact spelling for visible brand, model, variant, shade, size, pack count, and formulation text.
 - Do not include hidden reasoning. Return only the requested structured observation.`;
+
+function supportsOriginalImageDetail(model: string): boolean {
+  return /^gpt-5\.(?:4|5|6)(?:-|$)/.test(model);
+}
+
+function imageDetail(input: {
+  model: string;
+  role: string;
+  escalate: boolean;
+}): "low" | "high" | "original" {
+  const precisionView = ["label", "barcode", "object_crop"].includes(
+    input.role,
+  );
+  if (
+    supportsOriginalImageDetail(input.model) &&
+    (["label", "barcode"].includes(input.role) ||
+      (input.escalate && precisionView))
+  ) {
+    return "original";
+  }
+  if (input.role === "primary") return input.escalate ? "high" : "low";
+  return precisionView ? "high" : "low";
+}
 
 function untrustedEvidenceText(input: {
   ocr: OcrBlock[];
@@ -93,6 +118,7 @@ export async function observeProduct(input: {
     async () => {
       const response = await getClient().responses.parse({
         model,
+        store: false,
         reasoning: { effort: env.OPENAI_REASONING_EFFORT },
         input: [
           { role: "system", content: SYSTEM_INSTRUCTIONS },
@@ -105,14 +131,11 @@ export async function observeProduct(input: {
                 {
                   type: "input_image" as const,
                   image_url: `data:image/jpeg;base64,${image.toString("base64")}`,
-                  // OCR and barcode extraction carry the fine-print burden.
-                  // Keep the primary object detailed and treat supplementary
-                  // frames as a low-cost first pass; escalation remains high.
-                  detail: input.escalate
-                    ? ("high" as const)
-                    : role === "primary"
-                      ? ("high" as const)
-                      : ("low" as const),
+                  detail: imageDetail({
+                    model,
+                    role,
+                    escalate: Boolean(input.escalate),
+                  }),
                 },
               ]),
             ],

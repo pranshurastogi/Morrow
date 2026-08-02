@@ -75,6 +75,40 @@ describe("candidate verification", () => {
     expect(result.contradictions[0]?.field).toBe("barcode");
   });
 
+  test("rejects a conflicting visible variant even inside one product family", () => {
+    const result = verifyCandidate(
+      { ...observation, visibleIdentifiers: [] },
+      candidate({ gtin: null, variant: "Hydrating Cream-to-Foam" }),
+    );
+    expect(result.classification).toBe("rejected");
+    expect(result.contradictions.map((item) => item.field)).toContain(
+      "variant",
+    );
+  });
+
+  test("normalizes a registered brand alias before contradiction policy", () => {
+    const result = verifyCandidate(
+      {
+        ...observation,
+        brand: "Dot & Key Skincare",
+        productName: "Ceramide Lip Balm",
+        variant: "Red Romance",
+        size: null,
+        visibleIdentifiers: [],
+      },
+      candidate({
+        brand: "Dot & Key",
+        name: "Ceramide Lip Balm",
+        variant: "Red Romance",
+        size: null,
+        gtin: null,
+      }),
+    );
+    expect(result.contradictions.map((item) => item.field)).not.toContain(
+      "brand",
+    );
+  });
+
   test("does not convert a close pair into an arbitrary exact choice", () => {
     const first = verifyCandidate(
       {

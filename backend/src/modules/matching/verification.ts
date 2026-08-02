@@ -9,6 +9,7 @@ import {
   normalizeText,
   sizesEquivalent,
 } from "../recognition/normalization";
+import { canonicalBrandName } from "../../integrations/shopify-ucp/merchant-registry";
 
 export interface CanonicalProductCandidate {
   id: string;
@@ -78,6 +79,31 @@ function sameOptionalIdentifier(
 ): boolean | null {
   if (!observed || !candidate) return null;
   return normalizeIdentifier(observed) === normalizeIdentifier(candidate);
+}
+
+function equivalentBrand(observed: string, candidate: string): boolean {
+  return (
+    normalizeText(canonicalBrandName(observed) ?? observed) ===
+    normalizeText(canonicalBrandName(candidate) ?? candidate)
+  );
+}
+
+function sameOptionalPresentation(
+  observed: string | null,
+  candidate: string | null,
+): boolean | null {
+  if (!observed || !candidate) return null;
+  const left = normalizeText(observed);
+  const right = normalizeText(candidate);
+  if (!left || !right) return null;
+  if (left === right) return true;
+  if (
+    Math.min(left.length, right.length) >= 4 &&
+    (left.includes(right) || right.includes(left))
+  ) {
+    return true;
+  }
+  return jaccardSimilarity(left, right) >= 0.72;
 }
 
 export function verifyCandidate(
@@ -198,7 +224,7 @@ export function verifyCandidate(
   if (
     observation.brand &&
     candidate.brand &&
-    normalizeText(observation.brand) !== normalizeText(candidate.brand)
+    !equivalentBrand(observation.brand, candidate.brand)
   ) {
     contradictions.push({
       field: "brand",
@@ -215,16 +241,32 @@ export function verifyCandidate(
     });
   }
 
-  const variantMatch =
-    observation.variant && candidate.variant
-      ? normalizeText(observation.variant) === normalizeText(candidate.variant)
-      : null;
+  const variantMatch = sameOptionalPresentation(
+    observation.variant,
+    candidate.variant,
+  );
   if (variantMatch === true) {
     matchedEvidence.push({
       field: "variant",
       observed: observation.variant!,
       candidate: candidate.variant!,
       weight: 0.1,
+    });
+  } else if (variantMatch === false) {
+    contradictions.push({
+      field: "variant",
+      observed: observation.variant!,
+      candidate: candidate.variant!,
+      fatal: true,
+    });
+  }
+
+  if (candidate.imageSimilarity >= 0.6) {
+    matchedEvidence.push({
+      field: "visual_package",
+      observed: "Photographed presentation",
+      candidate: "Catalogue presentation",
+      weight: 0.18,
     });
   }
 
@@ -238,7 +280,7 @@ export function verifyCandidate(
   if (
     observation.brand &&
     candidate.brand &&
-    normalizeText(observation.brand) === normalizeText(candidate.brand)
+    equivalentBrand(observation.brand, candidate.brand)
   ) {
     identityScore += 0.1;
   }
@@ -249,10 +291,24 @@ export function verifyCandidate(
 
   const exactIdentifierMatch =
     barcodeMatch === true || modelMatch === true || partMatch === true;
+  const corroboratingFields = new Set(
+    matchedEvidence
+      .filter(
+        (item) =>
+          item.field !== "barcode" &&
+          item.field !== "model_number" &&
+          item.field !== "part_number",
+      )
+      .map((item) => item.field),
+  ).size;
   let classification: CandidateClassification;
   if (fatal) classification = "rejected";
   else if (exactIdentifierMatch) classification = "exact_verified";
-  else if (identityScore >= 0.78 && sizeMatch !== false)
+  else if (
+    identityScore >= 0.78 &&
+    sizeMatch !== false &&
+    corroboratingFields >= 3
+  )
     classification = "likely_exact";
   else if (identityScore >= 0.45) classification = "similar";
   else classification = "rejected";

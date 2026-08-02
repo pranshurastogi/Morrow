@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { toMorrowError } from "../../common/errors";
 import type { ProductObservation } from "../../domain/product-observation";
 import { writeAuditEvent } from "../../infrastructure/database/audit-repository";
@@ -33,6 +34,39 @@ import { getEnvironment } from "../../config/env";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
 import { compareCandidatesVisually } from "../matching/openai-candidate-verifier";
 import { discoverProductCandidates } from "./candidate-discovery";
+
+function uniqueBarcodes(
+  barcodes: Awaited<ReturnType<typeof detectBarcode>>,
+): Awaited<ReturnType<typeof detectBarcode>> {
+  const seen = new Set<string>();
+  return barcodes.filter((barcode) => {
+    const key = `${barcode.format}:${barcode.value}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function observationViews(
+  preparedImages: Array<{
+    imageRecord: { role: string };
+    prepared: Awaited<ReturnType<typeof prepareImage>>;
+  }>,
+): Array<{ image: Buffer; role: string }> {
+  return preparedImages.flatMap((item) => {
+    if (item.imageRecord.role === "primary") {
+      return [
+        { image: item.prepared.processed, role: "primary" },
+        { image: item.prepared.objectCrop, role: "object_crop" },
+        { image: item.prepared.labelCrop, role: "label" },
+      ];
+    }
+    if (item.imageRecord.role === "label") {
+      return [{ image: item.prepared.labelCrop, role: "label" }];
+    }
+    return [{ image: item.prepared.processed, role: item.imageRecord.role }];
+  });
+}
 
 function mergeDeterministicBarcodes(
   observation: ProductObservation,
@@ -73,6 +107,18 @@ async function extractObservation(scanId: string) {
           retention: "processed-7d",
         }),
         writeObject({
+          objectKey: keys.objectCrop,
+          body: prepared.objectCrop,
+          contentType: "image/jpeg",
+          retention: "processed-7d",
+        }),
+        writeObject({
+          objectKey: keys.labelCrop,
+          body: prepared.labelCrop,
+          contentType: "image/jpeg",
+          retention: "processed-7d",
+        }),
+        writeObject({
           objectKey: keys.thumbnail,
           body: prepared.thumbnail,
           contentType: "image/webp",
@@ -89,12 +135,20 @@ async function extractObservation(scanId: string) {
         sha256: prepared.sha256,
       });
       const [barcodes, ocr] = await Promise.all([
-        rememberJson(`barcode:${prepared.sha256}`, 7 * 86_400, () =>
-          detectBarcode(prepared.processed),
+        rememberJson(
+          `barcode:${prepared.sha256}:aligned-v2`,
+          7 * 86_400,
+          async () => {
+            const [full, label] = await Promise.all([
+              detectBarcode(prepared.processed),
+              detectBarcode(prepared.labelCrop),
+            ]);
+            return uniqueBarcodes([...full, ...label]);
+          },
         ),
         getEnvironment().OCR_ENABLED
-          ? rememberJson(`ocr:${prepared.sha256}`, 30 * 86_400, () =>
-              extractText(prepared.processed),
+          ? rememberJson(`ocr:${prepared.sha256}:aligned-v2`, 30 * 86_400, () =>
+              extractText(prepared.ocrReady),
             )
           : Promise.resolve([]),
       ]);
@@ -105,10 +159,7 @@ async function extractObservation(scanId: string) {
   const ocr = preparedImages.flatMap((item) => item.ocr);
   const preparationDurationMs = Date.now() - extractionStartedAt;
   let result = await observeProduct({
-    images: preparedImages.map((item) => ({
-      image: item.prepared.processed,
-      role: item.imageRecord.role,
-    })),
+    images: observationViews(preparedImages),
     ocr,
     barcodes,
     mode: scan.mode,
@@ -116,10 +167,7 @@ async function extractObservation(scanId: string) {
   });
   if (shouldEscalateObservation(result.observation)) {
     result = await observeProduct({
-      images: preparedImages.map((item) => ({
-        image: item.prepared.processed,
-        role: item.imageRecord.role,
-      })),
+      images: observationViews(preparedImages),
       ocr,
       barcodes,
       mode: scan.mode,
@@ -131,6 +179,19 @@ async function extractObservation(scanId: string) {
 
   await clearDerivedEvidence(scanId);
   for (const item of preparedImages) {
+    await addEvidence({
+      scanId,
+      evidenceType: "image_quality",
+      value: {
+        width: item.prepared.width,
+        height: item.prepared.height,
+        blurScore: item.prepared.blurScore,
+        brightnessScore: item.prepared.brightnessScore,
+        alignedViews: ["full", "object", "label"],
+      },
+      source: "policy",
+      sourceImageId: item.imageRecord.id,
+    });
     for (const barcode of item.barcodes) {
       await addEvidence({
         scanId,
@@ -180,6 +241,14 @@ async function extractObservation(scanId: string) {
       model: result.model,
       promptVersion: result.promptVersion,
       claimCount: observation.claims.length,
+      imageCount: preparedImages.length,
+      alignedViewCount: observationViews(preparedImages).length,
+      lowQualityImageCount: preparedImages.filter(
+        (item) =>
+          item.prepared.blurScore < 0.12 ||
+          item.prepared.brightnessScore < 0.12 ||
+          item.prepared.brightnessScore > 0.94,
+      ).length,
       preparationDurationMs,
       observationDurationMs:
         Date.now() - extractionStartedAt - preparationDurationMs,
@@ -301,15 +370,59 @@ export async function processScan(scanId: string): Promise<void> {
         ) {
           try {
             const scanImages = await Promise.all(
-              preparedImages.map(async (image) => ({
-                image: await readObject(image.processedObjectKey!),
-                role: image.role,
-                sha256: image.sha256!,
-              })),
+              preparedImages.map(async (image) => {
+                const keys = derivedObjectKeys(image.objectKey);
+                const [processed, aligned] = await Promise.all([
+                  readObject(image.processedObjectKey!),
+                  image.role === "primary"
+                    ? Promise.allSettled([
+                        readObject(keys.objectCrop),
+                        readObject(keys.labelCrop),
+                      ])
+                    : Promise.resolve([]),
+                ]);
+                const views = [
+                  {
+                    image: processed,
+                    role: image.role,
+                    sha256: image.sha256!,
+                  },
+                ];
+                if (image.role === "primary") {
+                  if (aligned[0]?.status === "fulfilled") {
+                    views.push({
+                      image: aligned[0].value,
+                      role: "object_crop",
+                      sha256: createHash("sha256")
+                        .update(aligned[0].value)
+                        .digest("hex"),
+                    });
+                  }
+                  if (aligned[1]?.status === "fulfilled") {
+                    views.push({
+                      image: aligned[1].value,
+                      role: "label",
+                      sha256: createHash("sha256")
+                        .update(aligned[1].value)
+                        .digest("hex"),
+                    });
+                  }
+                }
+                return views;
+              }),
             );
-            candidates = await compareCandidatesVisually({
-              scanImages,
+            const visualComparison = await compareCandidatesVisually({
+              scanImages: scanImages.flat(),
               candidates,
+            });
+            candidates = visualComparison.candidates;
+            await writeAuditEvent({
+              userId: scan.userId,
+              entityType: "scan",
+              entityId: scan.id,
+              eventType: "VISUAL_CANDIDATES_COMPARED",
+              actorType: "worker",
+              payload: { ...visualComparison.report },
             });
           } catch {
             await writeAuditEvent({

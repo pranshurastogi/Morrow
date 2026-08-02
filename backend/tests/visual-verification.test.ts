@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   calculateVisualSimilarity,
+  isFatalVisualMismatch,
   selectVisualComparisonCandidates,
 } from "../src/modules/matching/openai-candidate-verifier";
 import type { CanonicalProductCandidate } from "../src/modules/matching/verification";
@@ -10,9 +11,12 @@ describe("visual candidate policy", () => {
     const score = calculateVisualSimilarity({
       relationship: "same_visible_package",
       brandMatch: "match",
-      packageShapeSimilarity: 0.95,
-      labelLayoutSimilarity: 0.9,
-      colorwaySimilarity: 0.9,
+      productLineMatch: "match",
+      packageFormMatch: "match",
+      labelLayoutMatch: "match",
+      colorwayMatch: "match",
+      variantMarkerMatch: "match",
+      sizeMarkerMatch: "match",
       visibleTextOverlap: ["Minimalist", "Niacinamide", "10%"],
       exactVariantVisuallySupported: true,
     });
@@ -25,13 +29,51 @@ describe("visual candidate policy", () => {
       calculateVisualSimilarity({
         relationship: "different_product",
         brandMatch: "mismatch",
-        packageShapeSimilarity: 1,
-        labelLayoutSimilarity: 1,
-        colorwaySimilarity: 1,
+        productLineMatch: "mismatch",
+        packageFormMatch: "match",
+        labelLayoutMatch: "match",
+        colorwayMatch: "match",
+        variantMarkerMatch: "unknown",
+        sizeMarkerMatch: "unknown",
         visibleTextOverlap: ["serum"],
         exactVariantVisuallySupported: false,
       }),
     ).toBe(0);
+  });
+
+  test("does not turn unknown visual axes into positive evidence", () => {
+    const score = calculateVisualSimilarity({
+      relationship: "uncertain",
+      brandMatch: "unknown",
+      productLineMatch: "unknown",
+      packageFormMatch: "unknown",
+      labelLayoutMatch: "unknown",
+      colorwayMatch: "unknown",
+      variantMarkerMatch: "unknown",
+      sizeMarkerMatch: "unknown",
+      visibleTextOverlap: [],
+      exactVariantVisuallySupported: false,
+    });
+    expect(score).toBe(0);
+  });
+
+  test("treats a visible variant contradiction as fatal", () => {
+    expect(
+      isFatalVisualMismatch({
+        candidateId: "candidate-red",
+        relationship: "same_product_family",
+        brandMatch: "match",
+        productLineMatch: "match",
+        packageFormMatch: "match",
+        labelLayoutMatch: "match",
+        colorwayMatch: "mismatch",
+        variantMarkerMatch: "mismatch",
+        sizeMarkerMatch: "unknown",
+        visibleTextOverlap: ["Lip Balm"],
+        contradictions: [{ field: "shade", buyer: "rose", candidate: "red" }],
+        exactVariantVisuallySupported: false,
+      }),
+    ).toBe(true);
   });
 
   test("compares every retrieved finalist with an available image", () => {
@@ -59,8 +101,8 @@ describe("visual candidate policy", () => {
     );
 
     const selected = selectVisualComparisonCandidates(candidates);
-    expect(selected).toHaveLength(10);
-    expect(selected.map((candidate) => candidate.id)).toContain("candidate-10");
+    expect(selected).toHaveLength(9);
+    expect(selected.map((candidate) => candidate.id)).toContain("candidate-9");
     expect(selected.map((candidate) => candidate.id)).not.toContain(
       "candidate-3",
     );

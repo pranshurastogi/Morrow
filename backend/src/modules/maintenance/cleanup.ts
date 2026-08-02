@@ -1,5 +1,6 @@
 import { getDatabase } from "../../infrastructure/database/client";
 import { deleteObject } from "../../infrastructure/storage/r2";
+import { derivedObjectKeys } from "../recognition/image-preparation";
 
 export async function runRetentionCleanup(): Promise<{
   originals: number;
@@ -20,17 +21,22 @@ export async function runRetentionCleanup(): Promise<{
   }
 
   const derivatives = await sql`
-    select id, processed_object_key, thumbnail_object_key from scan_images
+    select id, object_key, processed_object_key, thumbnail_object_key from scan_images
     where created_at < now() - interval '7 days'
       and (processed_object_key is not null or thumbnail_object_key is not null)
     limit 500
   `;
   let derivativeCount = 0;
   for (const row of derivatives) {
+    const alignedKeys = derivedObjectKeys(String(row.object_key));
     if (row.processed_object_key)
       await deleteObject(String(row.processed_object_key));
     if (row.thumbnail_object_key)
       await deleteObject(String(row.thumbnail_object_key));
+    await Promise.all([
+      deleteObject(alignedKeys.objectCrop),
+      deleteObject(alignedKeys.labelCrop),
+    ]);
     await sql`
       update scan_images set processed_object_key = null, thumbnail_object_key = null where id = ${row.id}
     `;
