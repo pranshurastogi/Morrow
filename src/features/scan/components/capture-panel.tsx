@@ -9,6 +9,7 @@ import {
 import { Plate, SectionKicker } from "@/components/morrow/bits";
 import { Button } from "@/components/ui/button";
 import { CameraCaptureDialog } from "./camera-capture-dialog";
+import { FirstCaptureSuggestions } from "./capture-coaching";
 
 interface CapturePanelProps {
   onFile: (file: File) => void;
@@ -79,6 +80,8 @@ export function CapturePanel({ onFile }: CapturePanelProps) {
           event.currentTarget.value = "";
         }}
       />
+
+      <FirstCaptureSuggestions />
 
       <div className="mt-8 flex gap-3 border-y border-border py-4">
         <div className="flex shrink-0 gap-1 text-primary" aria-hidden="true">

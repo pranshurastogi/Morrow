@@ -22,6 +22,29 @@ import {
 import { assertCandidateMayBeConfirmed } from "../src/modules/matching/confirmation-policy";
 import { isCheckoutExecutorConfigured } from "../src/infrastructure/runtime/checkout-capability";
 import { isPravaSandboxConfigured } from "../src/integrations/prava/environment";
+import type { ProductObservation } from "../src/domain/product-observation";
+import { determineNextCapture } from "../src/modules/matching/capture-policy";
+
+const genericObservation: ProductObservation = {
+  category: "computer_accessory",
+  subcategory: "wireless_mouse",
+  brand: null,
+  productName: "wireless computer mouse",
+  modelNumber: null,
+  partNumber: null,
+  variant: null,
+  size: null,
+  colors: ["black"],
+  materials: ["plastic"],
+  visibleIdentifiers: [],
+  distinctiveFeatures: ["central scroll wheel"],
+  visualSearchTerms: ["black wireless computer mouse"],
+  claims: [],
+  visualFingerprint: "black shell with central wheel",
+  exactIdentificationPossible: false,
+  missingEvidence: ["brand", "model number"],
+  suggestedNextCapture: "underside",
+};
 
 describe("deterministic policies", () => {
   test("normalizes identifiers without inventing barcode digits", () => {
@@ -147,5 +170,22 @@ describe("deterministic policies", () => {
         PRAVA_SECRET_KEY: "sk_live_example",
       }),
     ).toBeFalse();
+  });
+
+  test("preserves the observer's useful view for an object without a barcode", () => {
+    expect(determineNextCapture(genericObservation)).toMatchObject({
+      captureType: "underside",
+      title: "Show the underside",
+    });
+  });
+
+  test("asks packaged goods for a barcode when no better view was observed", () => {
+    expect(
+      determineNextCapture({
+        ...genericObservation,
+        category: "skincare",
+        suggestedNextCapture: "none",
+      }),
+    ).toMatchObject({ captureType: "barcode" });
   });
 });

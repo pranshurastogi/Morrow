@@ -4,6 +4,7 @@ import { Plate, StatusStamp } from "@/components/morrow/bits";
 import { Button } from "@/components/ui/button";
 import type { ScanRecord } from "../api/types";
 import { CameraCaptureDialog } from "./camera-capture-dialog";
+import { CaptureTargetCard } from "./capture-coaching";
 import { ExternalCatalogLinks } from "./external-catalog-links";
 import { ObservationSummary } from "./observation-summary";
 
@@ -39,6 +40,7 @@ export function EvidenceRequest({
           </p>
         </div>
       </Plate>
+      {request && <CaptureTargetCard captureType={request.captureType} />}
       <ExternalCatalogLinks scan={scan} className="mt-3" />
       <Button
         className="mt-5 min-h-12 w-full text-base"
@@ -64,6 +66,7 @@ export function EvidenceRequest({
         onCapture={onFile}
         onChooseFile={() => input.current?.click()}
         title={request?.title ?? "Capture another identifying mark"}
+        captureType={request?.captureType ?? "full_object"}
       />
     </section>
   );

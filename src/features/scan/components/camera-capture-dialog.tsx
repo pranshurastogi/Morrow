@@ -5,7 +5,14 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { Aperture, Camera, Image as ImageIcon, RefreshCw } from "lucide-react";
+import {
+  Aperture,
+  Camera,
+  Check,
+  CircleDashed,
+  Image as ImageIcon,
+  RefreshCw,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,12 +21,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { captureGuidance, type CaptureType } from "../model/capture-guidance";
+import type { FrameAssessment } from "../model/frame-quality";
+import { useCameraQuality } from "../model/use-camera-quality";
 
 type CameraState = "requesting" | "ready" | "error";
 
 interface CapturedFrame {
   file: File;
   previewUrl: string;
+  assessment: FrameAssessment | null;
 }
 
 interface CameraCaptureDialogProps {
@@ -28,6 +39,39 @@ interface CameraCaptureDialogProps {
   onCapture: (file: File) => void;
   onChooseFile: () => void;
   title?: string;
+  captureType?: CaptureType;
+}
+
+function FrameQualityReadout({
+  assessment,
+}: {
+  assessment: FrameAssessment | null;
+}) {
+  if (!assessment) {
+    return (
+      <div className="camera-quality-readout" aria-hidden="true">
+        {(["Light", "Detail", "Centring"] as const).map((label) => (
+          <span key={label} data-state="waiting">
+            <CircleDashed />
+            {label}
+          </span>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div
+      className="camera-quality-readout"
+      aria-label="Advisory camera quality checks"
+    >
+      {assessment.checks.map((check) => (
+        <span key={check.id} data-state={check.state}>
+          {check.state === "good" ? <Check /> : <CircleDashed />}
+          {check.label}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function cameraErrorMessage(error: unknown): string {
@@ -66,6 +110,7 @@ export function CameraCaptureDialog({
   onCapture,
   onChooseFile,
   title = "Live inspection camera",
+  captureType = "full_object",
 }: CameraCaptureDialogProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -77,6 +122,12 @@ export function CameraCaptureDialog({
   const [capturedFrame, setCapturedFrame] = useState<CapturedFrame | null>(
     null,
   );
+  const guidance = captureGuidance(captureType);
+  const frameAssessment = useCameraQuality({
+    active: open && cameraState === "ready" && !capturedFrame,
+    videoRef,
+    captureType,
+  });
 
   const clearCapturedFrame = useCallback(() => {
     setCapturedFrame((current) => {
@@ -224,8 +275,12 @@ export function CameraCaptureDialog({
       `morrow-camera-${new Date().toISOString().replaceAll(":", "-")}.jpg`,
       { type: "image/jpeg", lastModified: Date.now() },
     );
-    setCapturedFrame({ file, previewUrl: URL.createObjectURL(file) });
-  }, [stopCamera]);
+    setCapturedFrame({
+      file,
+      previewUrl: URL.createObjectURL(file),
+      assessment: frameAssessment,
+    });
+  }, [frameAssessment, stopCamera]);
 
   const useCapturedFrame = useCallback(() => {
     if (!capturedFrame) return;
@@ -245,9 +300,7 @@ export function CameraCaptureDialog({
             <DialogTitle className="font-display text-2xl font-normal">
               {title}
             </DialogTitle>
-            <DialogDescription>
-              Centre the object and keep its label square to the frame.
-            </DialogDescription>
+            <DialogDescription>{guidance.instruction}</DialogDescription>
           </DialogHeader>
         </div>
 
@@ -272,7 +325,8 @@ export function CameraCaptureDialog({
 
             {!capturedFrame && cameraState === "ready" && (
               <div
-                className="pointer-events-none absolute inset-[9%] border border-brass/70"
+                className="camera-alignment-overlay"
+                data-shape={guidance.guideShape}
                 aria-hidden="true"
               >
                 <span className="capture-alignment-corner" data-corner="tl" />
@@ -280,6 +334,7 @@ export function CameraCaptureDialog({
                 <span className="capture-alignment-corner" data-corner="bl" />
                 <span className="capture-alignment-corner" data-corner="br" />
                 <span className="capture-alignment-line" />
+                <span className="camera-alignment-label">{guidance.title}</span>
               </div>
             )}
 
@@ -312,13 +367,19 @@ export function CameraCaptureDialog({
             aria-live="polite"
           >
             {capturedFrame
-              ? "Frame held for review"
+              ? (capturedFrame.assessment?.advice ?? "Frame held for review")
               : cameraState === "ready"
-                ? "Camera ready · avoid glare · hold steady"
+                ? (frameAssessment?.advice ?? "Reading the live frame")
                 : cameraState === "error"
                   ? "Camera unavailable"
                   : "Requesting browser permission"}
           </p>
+
+          {(cameraState === "ready" || capturedFrame) && (
+            <FrameQualityReadout
+              assessment={capturedFrame?.assessment ?? frameAssessment}
+            />
+          )}
 
           {!capturedFrame && devices.length > 1 && (
             <label className="block text-sm" htmlFor="morrow-camera-source">
