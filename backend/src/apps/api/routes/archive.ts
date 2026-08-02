@@ -19,25 +19,29 @@ export const archiveRoutes: FastifyPluginAsync = async (app) => {
     dossiers: await listArchiveDossiers(request.principal.userId),
   }));
 
-  app.post("/archive/:scanId/repeat", async (request, reply) => {
-    const params = paramsSchema.parse(request.params);
-    const body = repeatSchema.parse(request.body);
-    const repeat = await createArchiveRepeat({
-      sourceScanId: params.scanId,
-      userId: request.principal.userId,
-      action: body.action,
-      quantity: body.quantity,
-      ...(body.maxBudgetMinor === undefined
-        ? {}
-        : { maxBudgetMinor: body.maxBudgetMinor }),
-      ...(body.currency === undefined
-        ? {}
-        : { currency: body.currency.toUpperCase() }),
-    });
-    await enqueueScan(repeat.scanId, `archive-repeat-${repeat.version}`);
-    return reply.code(202).send({
-      scanId: repeat.scanId,
-      status: repeat.status,
-    });
-  });
+  app.post(
+    "/archive/:scanId/repeat",
+    { config: { rateLimit: { max: 8, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const params = paramsSchema.parse(request.params);
+      const body = repeatSchema.parse(request.body);
+      const repeat = await createArchiveRepeat({
+        sourceScanId: params.scanId,
+        userId: request.principal.userId,
+        action: body.action,
+        quantity: body.quantity,
+        ...(body.maxBudgetMinor === undefined
+          ? {}
+          : { maxBudgetMinor: body.maxBudgetMinor }),
+        ...(body.currency === undefined
+          ? {}
+          : { currency: body.currency.toUpperCase() }),
+      });
+      await enqueueScan(repeat.scanId, `archive-repeat-${repeat.version}`);
+      return reply.code(202).send({
+        scanId: repeat.scanId,
+        status: repeat.status,
+      });
+    },
+  );
 };

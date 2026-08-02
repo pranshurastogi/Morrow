@@ -1,5 +1,6 @@
 import type { Sql } from "postgres";
 import { MorrowError } from "../../common/errors";
+import type { ScanStatus } from "../../domain/scan-status";
 import { getDatabase } from "../../infrastructure/database/client";
 import { databaseJson } from "../../infrastructure/database/json";
 
@@ -252,7 +253,7 @@ export async function createArchiveRepeat(
     currency?: string;
   },
   sql: Sql = getDatabase(),
-): Promise<{ scanId: string; status: "EXACT_VERIFIED"; version: number }> {
+): Promise<{ scanId: string; status: ScanStatus; version: number }> {
   return sql.begin(async (transaction) => {
     const [source] = await transaction`
       select s.*, candidate.classification, candidate.retrieval_score,
@@ -290,6 +291,24 @@ export async function createArchiveRepeat(
           "This object must be inspected or explicitly confirmed before a repeat purchase can be prepared.",
         statusCode: 409,
       });
+    }
+
+    const [existingRepeat] = await transaction`
+      select id, status, version from scans
+      where user_id = ${input.userId}
+        and source_scan_id = ${input.sourceScanId}
+        and initiation_source = 'archive_repeat'
+        and created_at > now() - interval '1 minute'
+        and status not in ('CHECKOUT_FAILED', 'ORDER_COMPLETED')
+      order by created_at desc
+      limit 1
+    `;
+    if (existingRepeat) {
+      return {
+        scanId: String(existingRepeat.id),
+        status: existingRepeat.status as ScanStatus,
+        version: Number(existingRepeat.version),
+      };
     }
 
     const currency = (
@@ -373,7 +392,7 @@ export async function createArchiveRepeat(
     `;
     return {
       scanId: String(repeat.id),
-      status: "EXACT_VERIFIED" as const,
+      status: "EXACT_VERIFIED",
       version: Number(repeat.version),
     };
   });
