@@ -647,6 +647,67 @@
   animation: field-note-feed 420ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
 }
 
+.archive-catalogue-card {
+  position: relative;
+  animation: archive-card-file 520ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+  transition:
+    transform 240ms cubic-bezier(0.16, 0.82, 0.22, 1),
+    box-shadow 240ms ease,
+    border-color 240ms ease;
+}
+
+.archive-catalogue-card::after {
+  content: "";
+  position: absolute;
+  inset: 0.35rem;
+  pointer-events: none;
+  border: 1px solid oklch(0.63 0.077 74.6 / 0.18);
+}
+
+.archive-catalogue-image {
+  isolation: isolate;
+}
+
+.archive-catalogue-image::after {
+  content: "";
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.7rem;
+  left: 0.7rem;
+  z-index: 2;
+  height: 1px;
+  pointer-events: none;
+  background: var(--brass);
+  opacity: 0.34;
+}
+
+.archive-catalogue-image img {
+  transition:
+    transform 520ms cubic-bezier(0.16, 0.82, 0.22, 1),
+    filter 520ms ease;
+  filter: saturate(0.82) contrast(1.025) sepia(0.05);
+}
+
+.archive-dossier-dialog {
+  background: var(--ivory);
+  box-shadow: 0 -18px 42px -32px var(--ink);
+}
+
+@media (hover: hover) {
+  .archive-catalogue-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--brass);
+    box-shadow:
+      0 1px 0 0 oklch(0.229 0.008 67.5 / 0.18),
+      0 16px 32px -23px oklch(0.229 0.008 67.5 / 0.58);
+  }
+
+  .archive-catalogue-card:hover .archive-catalogue-image img {
+    transform: scale(1.018);
+    filter: saturate(0.9) contrast(1.04);
+  }
+}
+
 @media (max-width: 420px) {
   .inspection-machine {
     grid-template-columns: 1fr;

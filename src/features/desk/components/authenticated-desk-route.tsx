@@ -2,6 +2,7 @@ import { ClerkLoading, Show } from "@clerk/tanstack-react-start";
 import { AuthenticationDesk } from "@/features/auth/authentication-desk";
 import { ScanHeader } from "@/features/scan/components/scan-header";
 import { ScanNavigation } from "@/features/scan/components/scan-navigation";
+import { ArchivePage } from "./archive-page";
 import { DeskSectionPage, type DeskSection } from "./desk-section-page";
 
 const routeBySection = {
@@ -36,7 +37,11 @@ export function AuthenticatedDeskRoute({ section }: { section: DeskSection }) {
         <AuthenticationDesk returnTo={routeBySection[section]} />
       </Show>
       <Show when="signed-in">
-        <DeskSectionPage section={section} />
+        {section === "archive" ? (
+          <ArchivePage />
+        ) : (
+          <DeskSectionPage section={section} />
+        )}
         <ScanNavigation />
       </Show>
     </div>

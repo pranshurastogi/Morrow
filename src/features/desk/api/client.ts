@@ -1,5 +1,48 @@
 import { apiRequest } from "@/lib/morrow-api";
-import type { OrderSummary, PurchaseIntentSummary, ScanRecord } from "./types";
+import type {
+  ArchiveDossier,
+  OrderSummary,
+  PurchaseIntentSummary,
+  ScanRecord,
+} from "./types";
+
+export async function listArchive(
+  accessToken: string,
+): Promise<ArchiveDossier[]> {
+  const response = await apiRequest<{ dossiers: ArchiveDossier[] }>(
+    "/archive",
+    {},
+    accessToken,
+  );
+  return response.dossiers;
+}
+
+export function repeatArchiveInspection(
+  accessToken: string,
+  input: {
+    scanId: string;
+    action: "reorder" | "prepare_approval";
+    quantity: number;
+    maxBudgetMinor?: number;
+    currency?: string;
+  },
+): Promise<{ scanId: string; status: ScanRecord["status"] }> {
+  return apiRequest(
+    `/archive/${input.scanId}/repeat`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        action: input.action,
+        quantity: input.quantity,
+        ...(input.maxBudgetMinor === undefined
+          ? {}
+          : { maxBudgetMinor: input.maxBudgetMinor }),
+        ...(input.currency === undefined ? {} : { currency: input.currency }),
+      }),
+    },
+    accessToken,
+  );
+}
 
 export async function listScans(accessToken: string): Promise<ScanRecord[]> {
   const response = await apiRequest<{ scans: ScanRecord[] }>(

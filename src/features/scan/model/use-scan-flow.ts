@@ -372,7 +372,7 @@ function paymentFailure(result: PublicPaymentResult): {
   };
 }
 
-export function useScanFlow() {
+export function useScanFlow(initialScanId?: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const streamAbort = useRef<AbortController | null>(null);
   const paymentAbort = useRef<AbortController | null>(null);
@@ -383,6 +383,7 @@ export function useScanFlow() {
   const paymentSurfaceFailed = useRef(false);
   const sandboxSurfaceApproved = useRef(false);
   const previewUrlRef = useRef<string | null>(null);
+  const resumedScanId = useRef<string | null>(null);
 
   const setPreview = useCallback((file: File) => {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
@@ -467,6 +468,13 @@ export function useScanFlow() {
     },
     [hydrateResult, hydrateReview],
   );
+
+  useEffect(() => {
+    if (!initialScanId || resumedScanId.current === initialScanId) return;
+    resumedScanId.current = initialScanId;
+    dispatch({ type: "stage", stage: "inspecting" });
+    void followScan(initialScanId);
+  }, [followScan, initialScanId]);
 
   const startScan = useCallback(
     async (file: File) => {

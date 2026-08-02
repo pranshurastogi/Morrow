@@ -1,5 +1,6 @@
 import { ClerkLoading, Show } from "@clerk/tanstack-react-start";
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { AuthenticationDesk } from "@/features/auth/authentication-desk";
 import { AuthorityPanel } from "@/features/scan/components/authority-panel";
 import { CapturePanel } from "@/features/scan/components/capture-panel";
@@ -31,6 +32,10 @@ const description =
   "Scan an object, verify the exact product, compare trusted dispatches, and approve a bounded purchase through Prava.";
 
 export const Route = createFileRoute("/scan")({
+  validateSearch: z.object({
+    resumeScanId: z.string().uuid().optional(),
+    purchaseIntentId: z.string().uuid().optional(),
+  }),
   head: () => ({
     meta: [
       { title },
@@ -77,7 +82,8 @@ function ScanPage() {
 }
 
 function AuthenticatedScanDesk() {
-  const { state, actions } = useScanFlow();
+  const { resumeScanId } = Route.useSearch();
+  const { state, actions } = useScanFlow(resumeScanId);
   const {
     stage,
     previewUrl,

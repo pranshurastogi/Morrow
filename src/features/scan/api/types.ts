@@ -19,6 +19,8 @@ export type ScanStatus =
 
 export interface ScanRecord {
   id: string;
+  sourceScanId?: string | null;
+  initiationSource?: "capture" | "archive_repeat";
   status: ScanStatus;
   mode: "exact" | "similar_allowed";
   quantity: number;
