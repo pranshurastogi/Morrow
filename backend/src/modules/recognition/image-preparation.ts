@@ -26,22 +26,23 @@ export async function prepareImage(input: Buffer): Promise<PreparedImage> {
     })
     .removeAlpha();
 
-  const processed = await pipeline
-    .clone()
-    .jpeg({ quality: 84, mozjpeg: true })
-    .toBuffer();
-  const thumbnail = await pipeline
-    .clone()
-    .resize({
-      width: 480,
-      height: 480,
-      fit: "inside",
-      withoutEnlargement: true,
-    })
-    .webp({ quality: 78 })
-    .toBuffer();
-  const metadata = await sharp(processed).metadata();
-  const stats = await sharp(processed).stats();
+  const [processed, thumbnail] = await Promise.all([
+    pipeline.clone().jpeg({ quality: 84, mozjpeg: true }).toBuffer(),
+    pipeline
+      .clone()
+      .resize({
+        width: 480,
+        height: 480,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 78 })
+      .toBuffer(),
+  ]);
+  const [metadata, stats] = await Promise.all([
+    sharp(processed).metadata(),
+    sharp(processed).stats(),
+  ]);
   const brightnessScore =
     stats.channels
       .slice(0, 3)

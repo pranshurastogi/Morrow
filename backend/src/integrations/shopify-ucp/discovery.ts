@@ -11,11 +11,13 @@ import {
 import type { UcpCatalogResult, UcpProduct } from "./schemas";
 
 export type UcpDiscoveryRoute = "global" | "brand_store" | "category_store";
+export type UcpDiscoveryQueryKind = "identifier" | "exact" | "relaxed";
 
 export interface UcpDiscoveryAttempt {
   route: UcpDiscoveryRoute;
   merchant: string;
-  queryKind: "exact" | "relaxed";
+  queryKind: UcpDiscoveryQueryKind;
+  query: string;
   status: "succeeded" | "failed";
   productCount: number;
 }
@@ -25,7 +27,13 @@ export interface UcpDiscoveryReport {
   attempts: UcpDiscoveryAttempt[];
   exactQuery: string;
   relaxedQuery: string | null;
+  identifierQuery: string | null;
   productCount: number;
+}
+
+interface CatalogQuery {
+  kind: UcpDiscoveryQueryKind;
+  query: string;
 }
 
 export function buildCatalogQuery(observation: ProductObservation): string {
@@ -69,6 +77,53 @@ export function buildRelaxedCatalogQuery(
     normalizeText(query) !== normalizeText(buildCatalogQuery(observation))
     ? query
     : null;
+}
+
+export function buildIdentifierCatalogQuery(
+  observation: ProductObservation,
+): string | null {
+  const identifiers = [
+    ...observation.visibleIdentifiers
+      .filter((identifier) =>
+        ["barcode", "model_number", "part_number", "sku"].includes(
+          identifier.type,
+        ),
+      )
+      .map((identifier) => identifier.value),
+    observation.modelNumber,
+    observation.partNumber,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (identifiers.length === 0) return null;
+  return [observation.brand, identifiers[0]]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .slice(0, 180);
+}
+
+export function buildCatalogQueryPlan(
+  observation: ProductObservation,
+): CatalogQuery[] {
+  const candidates: CatalogQuery[] = [
+    {
+      kind: "identifier",
+      query: buildIdentifierCatalogQuery(observation) ?? "",
+    },
+    { kind: "exact", query: buildCatalogQuery(observation) },
+    {
+      kind: "relaxed",
+      query: buildRelaxedCatalogQuery(observation) ?? "",
+    },
+  ];
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const normalized = normalizeText(candidate.query);
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 }
 
 function productKey(product: UcpProduct): string {
@@ -129,25 +184,33 @@ export async function discoverUcpCatalog(input: {
   const env = getEnvironment();
   const exactQuery = buildCatalogQuery(input.observation);
   const relaxedQuery = buildRelaxedCatalogQuery(input.observation);
+  const identifierQuery = buildIdentifierCatalogQuery(input.observation);
+  const queryPlan = buildCatalogQueryPlan(input.observation);
   if (!env.UCP_ENABLED || !exactQuery) {
     return {
       results: [],
       attempts: [],
       exactQuery,
       relaxedQuery,
+      identifierQuery,
       productCount: 0,
     };
   }
 
+  const brandMerchants = brandIndianMerchants(input.observation.brand);
   const brandStores = new Set(
-    brandIndianMerchants(input.observation.brand).map(
-      (merchant) => merchant.endpoint,
-    ),
+    brandMerchants.map((merchant) => merchant.endpoint),
   );
-  const targeted = relevantIndianMerchants(
-    input.observation,
-    env.UCP_MAX_MERCHANTS_PER_SCAN,
-  );
+  // Global Catalog is the cross-merchant route. When the brand has an
+  // allowlisted official storefront, query that store directly instead of
+  // fanning the same branded request out to unrelated single-brand stores.
+  const targeted =
+    brandMerchants.length > 0
+      ? brandMerchants
+      : relevantIndianMerchants(
+          input.observation,
+          env.UCP_MAX_MERCHANTS_PER_SCAN,
+        );
   const endpoints = (
     [
       {
@@ -163,12 +226,21 @@ export async function discoverUcpCatalog(input: {
   );
 
   const attempts: UcpDiscoveryAttempt[] = [];
+  const eagerJobs = endpoints.flatMap((source) =>
+    queryPlan
+      .filter(
+        (query) =>
+          source.route !== "category_store" || query.kind !== "relaxed",
+      )
+      .map((query) => ({ source, query })),
+  );
   const exactSettled = await Promise.allSettled(
-    endpoints.map(async (source) => ({
+    eagerJobs.map(async ({ source, query }) => ({
       source,
+      query,
       result: await searchUcpCatalog({
         endpoint: source.endpoint,
-        query: exactQuery,
+        query: query.query,
         countryCode: input.countryCode,
         currency: input.currency,
         intent:
@@ -179,35 +251,48 @@ export async function discoverUcpCatalog(input: {
   );
 
   const results: UcpCatalogResult[] = [];
-  const emptyEndpoints: DiscoveryEndpoint[] = [];
+  const categoryProductCounts = new Map<string, number>();
   let successfulCalls = 0;
   let firstFailure: unknown;
   exactSettled.forEach((settled, index) => {
-    const source = endpoints[index]!;
+    const job = eagerJobs[index]!;
+    const { source, query } = job;
     if (settled.status === "fulfilled") {
       successfulCalls += 1;
       const count = settled.value.result.products.length;
       attempts.push({
         route: source.route,
         merchant: source.merchant,
-        queryKind: "exact",
+        queryKind: query.kind,
+        query: query.query,
         status: "succeeded",
         productCount: count,
       });
       results.push(settled.value.result);
-      if (count === 0 && relaxedQuery) emptyEndpoints.push(source);
+      if (source.route === "category_store") {
+        categoryProductCounts.set(
+          source.endpoint,
+          (categoryProductCounts.get(source.endpoint) ?? 0) + count,
+        );
+      }
       return;
     }
     firstFailure ??= settled.reason;
     attempts.push({
       route: source.route,
       merchant: source.merchant,
-      queryKind: "exact",
+      queryKind: query.kind,
+      query: query.query,
       status: "failed",
       productCount: 0,
     });
   });
 
+  const emptyEndpoints = endpoints.filter(
+    (source) =>
+      source.route === "category_store" &&
+      (categoryProductCounts.get(source.endpoint) ?? 0) === 0,
+  );
   if (relaxedQuery && emptyEndpoints.length > 0) {
     const relaxedSettled = await Promise.allSettled(
       emptyEndpoints.map(async (source) => ({
@@ -231,6 +316,7 @@ export async function discoverUcpCatalog(input: {
           route: source.route,
           merchant: source.merchant,
           queryKind: "relaxed",
+          query: relaxedQuery,
           status: "succeeded",
           productCount: settled.value.result.products.length,
         });
@@ -242,6 +328,7 @@ export async function discoverUcpCatalog(input: {
         route: source.route,
         merchant: source.merchant,
         queryKind: "relaxed",
+        query: relaxedQuery,
         status: "failed",
         productCount: 0,
       });
@@ -255,6 +342,7 @@ export async function discoverUcpCatalog(input: {
     attempts,
     exactQuery,
     relaxedQuery,
+    identifierQuery,
     productCount: deduped.reduce(
       (total, result) => total + result.products.length,
       0,

@@ -108,7 +108,6 @@ export async function searchUcpCatalog(input: {
             filters: {
               available: true,
               ships_to: { country: input.countryCode.toUpperCase() },
-              ships_from: [{ country: input.countryCode.toUpperCase() }],
             },
           }
         : {}),

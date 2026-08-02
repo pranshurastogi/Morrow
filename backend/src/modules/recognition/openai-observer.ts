@@ -10,7 +10,7 @@ import type { DetectedBarcode } from "./barcode";
 import type { OcrBlock } from "./ocr";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
 
-const PROMPT_VERSION = "morrow-observer-2026-08-01.1";
+const PROMPT_VERSION = "morrow-observer-2026-08-02.1";
 
 const SYSTEM_INSTRUCTIONS = `You are Morrow's product evidence observer.
 Your only job is to extract claims supported by the supplied image and untrusted evidence.
@@ -105,9 +105,14 @@ export async function observeProduct(input: {
                 {
                   type: "input_image" as const,
                   image_url: `data:image/jpeg;base64,${image.toString("base64")}`,
+                  // OCR and barcode extraction carry the fine-print burden.
+                  // Keep the primary object detailed and treat supplementary
+                  // frames as a low-cost first pass; escalation remains high.
                   detail: input.escalate
-                    ? ("original" as const)
-                    : ("high" as const),
+                    ? ("high" as const)
+                    : role === "primary"
+                      ? ("high" as const)
+                      : ("low" as const),
                 },
               ]),
             ],
@@ -142,9 +147,20 @@ export function shouldEscalateObservation(
   const strongIdentifier = observation.visibleIdentifiers.some((identifier) =>
     ["barcode", "model_number", "part_number"].includes(identifier.type),
   );
+  const identityCoreVisible = Boolean(
+    observation.brand && observation.productName,
+  );
+  const variantEvidenceVisible = Boolean(
+    observation.size ||
+    observation.variant ||
+    observation.modelNumber ||
+    observation.partNumber,
+  );
   return (
-    observation.exactIdentificationPossible &&
     !strongIdentifier &&
-    observation.missingEvidence.length <= 1
+    ((!identityCoreVisible && observation.claims.length >= 2) ||
+      (observation.exactIdentificationPossible &&
+        !variantEvidenceVisible &&
+        observation.missingEvidence.length <= 1))
   );
 }

@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { ProductObservation } from "../src/domain/product-observation";
 import {
+  buildCatalogQueryPlan,
   buildCatalogQuery,
+  buildIdentifierCatalogQuery,
   buildRelaxedCatalogQuery,
 } from "../src/integrations/shopify-ucp/discovery";
 import { catalogIdentityKey } from "../src/integrations/shopify-ucp/catalog-ingestion";
@@ -52,6 +54,25 @@ describe("Shopify UCP catalogue normalization", () => {
     expect(buildRelaxedCatalogQuery(observation)).toBe(
       "Minimalist Niacinamide 10% Face Serum",
     );
+  });
+
+  test("searches an observed identifier independently from descriptive text", () => {
+    const identified = {
+      ...observation,
+      visibleIdentifiers: [
+        {
+          type: "barcode" as const,
+          value: "8906123456789",
+          evidenceBasis: "barcode_decoder" as const,
+        },
+      ],
+    };
+    expect(buildIdentifierCatalogQuery(identified)).toBe(
+      "Minimalist 8906123456789",
+    );
+    expect(
+      buildCatalogQueryPlan(identified).map((query) => query.kind),
+    ).toEqual(["identifier", "exact", "relaxed"]);
   });
 
   test("routes both the exact brand store and relevant category storefronts", () => {

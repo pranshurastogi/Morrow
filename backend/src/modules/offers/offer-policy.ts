@@ -28,6 +28,7 @@ export interface CatalogEquivalence {
     | "same_catalogue_record"
     | "exact_identifier"
     | "brand_store_bridge"
+    | "official_brand_evidence"
     | "unproven";
 }
 
@@ -129,6 +130,10 @@ export function verifyCatalogEquivalence(input: {
       .filter(Boolean)
       .join(" "),
   );
+  const variantSimilarity =
+    selected.variant && listingProduct.variant
+      ? jaccardSimilarity(selected.variant, listingProduct.variant)
+      : null;
   if (
     selectedHasIdentifier &&
     input.officialBrandStore &&
@@ -143,6 +148,23 @@ export function verifyCatalogEquivalence(input: {
       basis: "brand_store_bridge",
     };
   }
+  const presentationEvidence =
+    sizeMatch === true ||
+    (variantSimilarity !== null && variantSimilarity >= 0.75) ||
+    (!selected.size && !selected.variant && titleSimilarity >= 0.82);
+  if (
+    input.officialBrandStore &&
+    brandMatch &&
+    presentationEvidence &&
+    titleSimilarity >= 0.4
+  ) {
+    return {
+      status: "verified",
+      score: Math.min(0.92, 0.76 + titleSimilarity * 0.18),
+      contradictions: [],
+      basis: "official_brand_evidence",
+    };
+  }
   return {
     status: "likely",
     score: Math.min(0.74, titleSimilarity),
@@ -150,6 +172,48 @@ export function verifyCatalogEquivalence(input: {
       "The merchant record is not linked by an exact identifier or official brand-store proof",
     ],
     basis: "unproven",
+  };
+}
+
+export function combineOfferIdentityProof(input: {
+  sourceVerification: NormalizedOffer["identityVerification"];
+  equivalence: CatalogEquivalence;
+}): NormalizedOffer["identityVerification"] {
+  if (
+    input.sourceVerification.status === "rejected" ||
+    input.equivalence.status === "rejected"
+  ) {
+    return {
+      status: "rejected",
+      score: 0,
+      contradictions: [
+        ...input.sourceVerification.contradictions,
+        ...input.equivalence.contradictions,
+      ],
+    };
+  }
+  // A same-record, exact-identifier, or official-store equivalence proof can
+  // establish identity even when the merchant omits a redundant barcode.
+  // Variant contradictions still reject above through sourceVerification.
+  if (input.equivalence.status === "verified") {
+    return {
+      status: "verified",
+      score: Math.min(
+        input.equivalence.score,
+        input.sourceVerification.status === "verified"
+          ? input.sourceVerification.score
+          : Math.max(0.8, input.sourceVerification.score),
+      ),
+      contradictions: [],
+    };
+  }
+  return {
+    status: "likely",
+    score: Math.min(input.sourceVerification.score, input.equivalence.score),
+    contradictions: [
+      ...input.sourceVerification.contradictions,
+      ...input.equivalence.contradictions,
+    ],
   };
 }
 

@@ -5,6 +5,7 @@ import { getDatabase } from "../../infrastructure/database/client";
 import type { CanonicalProductCandidate } from "../matching/verification";
 import { normalizedSizeSchema } from "../../domain/product-observation";
 import {
+  combineOfferIdentityProof,
   rankOffers,
   type OfferRequirements,
   verifyCatalogEquivalence,
@@ -226,32 +227,10 @@ export async function searchVerifiedListings(
         listingProduct,
         officialBrandStore,
       });
-      const identityVerification =
-        sourceVerification.status === "verified" &&
-        equivalence.status === "verified"
-          ? {
-              status: "verified" as const,
-              score: Math.min(sourceVerification.score, equivalence.score),
-              contradictions: [],
-            }
-          : sourceVerification.status === "rejected" ||
-              equivalence.status === "rejected"
-            ? {
-                status: "rejected" as const,
-                score: 0,
-                contradictions: [
-                  ...sourceVerification.contradictions,
-                  ...equivalence.contradictions,
-                ],
-              }
-            : {
-                status: "likely" as const,
-                score: Math.min(sourceVerification.score, equivalence.score),
-                contradictions: [
-                  ...sourceVerification.contradictions,
-                  ...equivalence.contradictions,
-                ],
-              };
+      const identityVerification = combineOfferIdentityProof({
+        sourceVerification,
+        equivalence,
+      });
       offer = {
         ...offer,
         product: {

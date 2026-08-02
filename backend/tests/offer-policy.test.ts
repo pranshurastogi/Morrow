@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { NormalizedOffer } from "../src/domain/commerce";
 import type { CanonicalProductCandidate } from "../src/modules/matching/verification";
 import {
+  combineOfferIdentityProof,
   rankOffers,
   verifyCatalogEquivalence,
   verifyMerchantVariant,
@@ -136,6 +137,40 @@ describe("merchant offer policy", () => {
     });
     expect(proof.status).toBe("verified");
     expect(proof.basis).toBe("brand_store_bridge");
+  });
+
+  test("accepts exact size and title evidence from an official brand storefront", () => {
+    const selected = { ...product, gtin: null };
+    const storefrontProduct: CanonicalProductCandidate = {
+      ...selected,
+      id: "official-storefront-product",
+      name: "CeraVe Foaming Facial Cleanser for Normal to Oily Skin",
+    };
+    const proof = verifyCatalogEquivalence({
+      selected,
+      listingProduct: storefrontProduct,
+      officialBrandStore: true,
+    });
+    expect(proof.status).toBe("verified");
+    expect(proof.basis).toBe("official_brand_evidence");
+  });
+
+  test("lets catalogue equivalence supply a barcode omitted by the listing", () => {
+    expect(
+      combineOfferIdentityProof({
+        sourceVerification: {
+          status: "likely",
+          score: 0.2,
+          contradictions: ["Merchant listing has no matching exact identifier"],
+        },
+        equivalence: {
+          status: "verified",
+          score: 1,
+          contradictions: [],
+          basis: "same_catalogue_record",
+        },
+      }),
+    ).toEqual({ status: "verified", score: 0.8, contradictions: [] });
   });
 
   test("does not bridge a retailer title without official-store provenance", () => {

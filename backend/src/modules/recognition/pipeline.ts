@@ -31,9 +31,8 @@ import { observeProduct, shouldEscalateObservation } from "./openai-observer";
 import { extractText } from "./ocr";
 import { getEnvironment } from "../../config/env";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
-import { discoverUcpCatalog } from "../../integrations/shopify-ucp/discovery";
-import { ingestUcpCatalog } from "../../integrations/shopify-ucp/catalog-ingestion";
 import { compareCandidatesVisually } from "../matching/openai-candidate-verifier";
+import { discoverProductCandidates } from "./candidate-discovery";
 
 function mergeDeterministicBarcodes(
   observation: ProductObservation,
@@ -56,6 +55,7 @@ function mergeDeterministicBarcodes(
 }
 
 async function extractObservation(scanId: string) {
+  const extractionStartedAt = Date.now();
   const scan = await getScan(scanId);
   const images = await getScanImages(scanId);
   if (images.length === 0) throw new Error("Scan has no image");
@@ -103,6 +103,7 @@ async function extractObservation(scanId: string) {
   );
   const barcodes = preparedImages.flatMap((item) => item.barcodes);
   const ocr = preparedImages.flatMap((item) => item.ocr);
+  const preparationDurationMs = Date.now() - extractionStartedAt;
   let result = await observeProduct({
     images: preparedImages.map((item) => ({
       image: item.prepared.processed,
@@ -179,6 +180,10 @@ async function extractObservation(scanId: string) {
       model: result.model,
       promptVersion: result.promptVersion,
       claimCount: observation.claims.length,
+      preparationDurationMs,
+      observationDurationMs:
+        Date.now() - extractionStartedAt - preparationDurationMs,
+      totalDurationMs: Date.now() - extractionStartedAt,
     },
   });
   return observation;
@@ -203,28 +208,14 @@ export async function processScan(scanId: string): Promise<void> {
       if (scan.status === "EVIDENCE_EXTRACTED") {
         if (!scan.observation) throw new Error("Scan observation is missing");
         const capture = determineNextCapture(scan.observation);
-        let candidates = await retrieveCandidates({
+        const discovery = await discoverProductCandidates({
           observation: scan.observation,
           userId: scan.userId,
+          countryCode: scan.countryCode ?? "IN",
+          currency: scan.currency ?? "INR",
         });
-        let discoveredProductIds: string[] = [];
-        try {
-          const discovery = await discoverUcpCatalog({
-            observation: scan.observation,
-            countryCode: scan.countryCode ?? "IN",
-            currency: scan.currency ?? "INR",
-          });
-          discoveredProductIds = await ingestUcpCatalog({
-            results: discovery.results,
-            observation: scan.observation,
-          });
-          if (discoveredProductIds.length > 0) {
-            candidates = await retrieveCandidates({
-              observation: scan.observation,
-              userId: scan.userId,
-              preferredProductIds: discoveredProductIds,
-            });
-          }
+        const candidates = discovery.candidates;
+        if (discovery.liveCatalog) {
           await writeAuditEvent({
             userId: scan.userId,
             entityType: "scan",
@@ -233,22 +224,25 @@ export async function processScan(scanId: string): Promise<void> {
             actorType: "provider",
             payload: {
               provider: "shopify_ucp",
-              candidateCount: discoveredProductIds.length,
-              productCount: discovery.productCount,
-              attempts: discovery.attempts.length,
-              successfulAttempts: discovery.attempts.filter(
+              candidateCount: discovery.discoveredProductIds.length,
+              productCount: discovery.liveCatalog.productCount,
+              attempts: discovery.liveCatalog.attempts.length,
+              successfulAttempts: discovery.liveCatalog.attempts.filter(
                 (attempt) => attempt.status === "succeeded",
               ).length,
-              failedAttempts: discovery.attempts.filter(
+              failedAttempts: discovery.liveCatalog.attempts.filter(
                 (attempt) => attempt.status === "failed",
               ).length,
               routes: [
-                ...new Set(discovery.attempts.map((attempt) => attempt.route)),
+                ...new Set(
+                  discovery.liveCatalog.attempts.map(
+                    (attempt) => attempt.route,
+                  ),
+                ),
               ],
             },
           });
-        } catch (error) {
-          if (candidates.length === 0) throw error;
+        } else if (discovery.liveCatalogError) {
           await writeAuditEvent({
             userId: scan.userId,
             entityType: "scan",
@@ -295,7 +289,16 @@ export async function processScan(scanId: string): Promise<void> {
         const preparedImages = (await getScanImages(scanId))
           .filter((image) => Boolean(image.processedObjectKey && image.sha256))
           .slice(-4);
-        if (preparedImages.length > 0) {
+        const deterministicVerifications = candidates.map((candidate) =>
+          verifyCandidate(scan.observation!, candidate),
+        );
+        const deterministicDecision = classifyCandidateSet(
+          deterministicVerifications,
+        );
+        if (
+          preparedImages.length > 0 &&
+          deterministicDecision.status !== "EXACT_VERIFIED"
+        ) {
           try {
             const scanImages = await Promise.all(
               preparedImages.map(async (image) => ({
@@ -318,6 +321,18 @@ export async function processScan(scanId: string): Promise<void> {
               payload: { fallback: "deterministic_text_and_identifier_policy" },
             });
           }
+        } else if (deterministicDecision.status === "EXACT_VERIFIED") {
+          await writeAuditEvent({
+            userId: scan.userId,
+            entityType: "scan",
+            entityId: scan.id,
+            eventType: "VISUAL_COMPARISON_SKIPPED",
+            actorType: "policy",
+            payload: {
+              reason: "exact_identifier_already_settled_identity",
+              productId: deterministicDecision.selected?.candidateId,
+            },
+          });
         }
         const verifications = candidates.map((candidate) =>
           verifyCandidate(scan.observation!, candidate),

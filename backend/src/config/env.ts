@@ -43,6 +43,7 @@ const environmentSchema = z.object({
     .enum(["none", "low", "medium", "high"])
     .default("low"),
   OCR_ENABLED: booleanFromEnvironment,
+  OCR_POOL_SIZE: z.coerce.number().int().min(1).max(4).default(2),
 
   UCP_ENABLED: enabledBooleanFromEnvironment,
   UCP_GLOBAL_CATALOG_URL: z
@@ -59,7 +60,7 @@ const environmentSchema = z.object({
     .min(1_000)
     .max(60_000)
     .default(12_000),
-  UCP_MAX_PRODUCTS: z.coerce.number().int().min(1).max(20).default(8),
+  UCP_MAX_PRODUCTS: z.coerce.number().int().min(1).max(50).default(12),
   UCP_MAX_MERCHANTS_PER_SCAN: z.coerce.number().int().min(1).max(10).default(6),
 
   PRAVA_API_URL: z.url().default("https://sandbox.api.prava.space"),

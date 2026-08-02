@@ -11,6 +11,7 @@ import {
 } from "../../infrastructure/queue/queues";
 import { executeCheckout } from "../../modules/checkout/orchestrator";
 import { processScan } from "../../modules/recognition/pipeline";
+import { closeOcrPool, warmOcrPool } from "../../modules/recognition/ocr";
 import { runRetentionCleanup } from "../../modules/maintenance/cleanup";
 import {
   captureOperationalError,
@@ -24,6 +25,12 @@ assertRuntimeConfiguration("worker", env);
 await startObservability("worker");
 const stopCheckoutCapabilityHeartbeat =
   await startCheckoutCapabilityHeartbeat();
+if (env.OCR_ENABLED) {
+  await warmOcrPool().catch((error) => {
+    captureOperationalError(error, { component: "ocr_pool", phase: "warmup" });
+    console.warn("OCR pool warmup failed; the first scan will retry");
+  });
+}
 
 const workers = [
   new Worker(
@@ -73,6 +80,7 @@ for (const worker of workers) {
 async function shutdown(signal: string) {
   console.info({ signal }, "worker shutting down");
   await Promise.all(workers.map((worker) => worker.close()));
+  await closeOcrPool();
   await stopCheckoutCapabilityHeartbeat();
   await closeDatabase();
   await closeRedis();

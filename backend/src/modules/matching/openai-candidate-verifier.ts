@@ -6,7 +6,7 @@ import { getEnvironment } from "../../config/env";
 import { rememberJson } from "../../infrastructure/cache/json-cache";
 import type { CanonicalProductCandidate } from "./verification";
 
-const PROMPT_VERSION = "morrow-candidate-comparison-2026-08-01.2";
+const PROMPT_VERSION = "morrow-candidate-comparison-2026-08-02.1";
 
 const visualComparisonSchema = z.object({
   candidates: z.array(
@@ -166,7 +166,7 @@ export async function compareCandidatesVisually(input: {
                 type: "input_text",
                 text: "CATALOGUE CANDIDATES follow. Compare each candidate ID independently.",
               },
-              ...comparable.flatMap((candidate) => [
+              ...comparable.flatMap((candidate, index) => [
                 {
                   type: "input_text" as const,
                   text: JSON.stringify({
@@ -180,7 +180,7 @@ export async function compareCandidatesVisually(input: {
                 {
                   type: "input_image" as const,
                   image_url: candidate.imageUrl!,
-                  detail: "high" as const,
+                  detail: index < 4 ? ("high" as const) : ("low" as const),
                 },
               ]),
             ],
