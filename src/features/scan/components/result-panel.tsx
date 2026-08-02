@@ -38,6 +38,8 @@ export function ResultPanel({
   onRefreshOffers,
   offerRefreshing,
   offerRefreshMessage,
+  sandboxStartError,
+  sandboxRestarting,
   onReject,
 }: {
   scan: ScanRecord;
@@ -51,6 +53,12 @@ export function ResultPanel({
   onRefreshOffers: () => void;
   offerRefreshing: boolean;
   offerRefreshMessage: string | null;
+  sandboxStartError: {
+    code: string;
+    message: string;
+    reference?: string;
+  } | null;
+  sandboxRestarting: boolean;
   onReject: () => void;
 }) {
   const evidence = candidate.matched_evidence.map((item) => ({
@@ -309,6 +317,32 @@ export function ResultPanel({
         </Plate>
       )}
 
+      {sandboxStartError && (
+        <div role="status" aria-live="polite">
+          <Plate className="mt-3 border-postal/45 p-4">
+            <div className="flex gap-3">
+              <CircleAlert
+                className="mt-0.5 h-5 w-5 shrink-0 text-postal"
+                aria-hidden
+              />
+              <div>
+                <p className="font-medium">Prava sandbox is busy</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  A session was not created. Your verified item and dispatch are
+                  unchanged; try again in a moment.
+                </p>
+                <p className="mt-2 font-mono text-[11px] text-postal">
+                  {sandboxStartError.code}
+                  {sandboxStartError.reference
+                    ? ` · REF ${sandboxStartError.reference}`
+                    : ""}
+                </p>
+              </div>
+            </div>
+          </Plate>
+        </div>
+      )}
+
       <div className="mt-5 flex flex-col gap-2">
         <Button
           className="min-h-12 text-base"
@@ -321,10 +355,19 @@ export function ResultPanel({
           <Button
             variant={unavailable ? "default" : "outline"}
             className="min-h-12 text-base"
+            disabled={sandboxRestarting}
             onClick={onSandboxTest}
           >
-            <FlaskConical className="mr-2 h-4 w-4" aria-hidden />
-            Test with Prava sandbox
+            {sandboxRestarting ? (
+              <RefreshCw className="mr-2 h-4 w-4 animate-dial" aria-hidden />
+            ) : (
+              <FlaskConical className="mr-2 h-4 w-4" aria-hidden />
+            )}
+            {sandboxRestarting
+              ? "Opening secure sandbox"
+              : sandboxStartError
+                ? "Try Prava sandbox again"
+                : "Test with Prava sandbox"}
           </Button>
         )}
         <Button variant="outline" className="min-h-11" onClick={onReject}>

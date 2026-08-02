@@ -6,6 +6,7 @@ import {
   normalizeIdentifier,
   normalizeText,
   sizesEquivalent,
+  tokenize,
 } from "../recognition/normalization";
 import { normalizedSizeSchema } from "../../domain/product-observation";
 import { canonicalBrandName } from "../../integrations/shopify-ucp/merchant-registry";
@@ -44,6 +45,65 @@ function sameProductIdentifier(
 ): boolean | null {
   if (!left || !right) return null;
   return normalizer(left) === normalizer(right);
+}
+
+const TITLE_LINKING_TOKENS = new Set([
+  "a",
+  "an",
+  "and",
+  "by",
+  "for",
+  "from",
+  "in",
+  "of",
+  "the",
+  "to",
+  "with",
+]);
+
+function catalogTitle(product: CanonicalProductCandidate): string {
+  return [product.name, product.variant].filter(Boolean).join(" ");
+}
+
+function explicitPackCount(value: string): number | null {
+  const normalized = value.normalize("NFKC").toLocaleLowerCase("en");
+  const patterns = [
+    /\bpack\s+of\s+(\d{1,2})\b/,
+    /\bcombo\s+of\s+(\d{1,2})\b/,
+    /\b(\d{1,2})\s*[- ]?pack\b/,
+    /\b(\d{1,2})\s*[x×]\s*\d/,
+  ];
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match?.[1]) continue;
+    const count = Number(match[1]);
+    if (Number.isInteger(count) && count > 0) return count;
+  }
+  return null;
+}
+
+function titleTokenCoverage(input: {
+  selected: CanonicalProductCandidate;
+  listingProduct: CanonicalProductCandidate;
+  normalizedBrand: string;
+}): number {
+  const brandTokens = tokenize(input.normalizedBrand);
+  const selectedTokens = new Set(
+    [...tokenize(catalogTitle(input.selected))].filter(
+      (token) => !brandTokens.has(token) && !TITLE_LINKING_TOKENS.has(token),
+    ),
+  );
+  const listingTokens = new Set(
+    [...tokenize(catalogTitle(input.listingProduct))].filter(
+      (token) => !brandTokens.has(token) && !TITLE_LINKING_TOKENS.has(token),
+    ),
+  );
+  if (selectedTokens.size === 0 || listingTokens.size === 0) return 0;
+  let matchedSelectedTokens = 0;
+  for (const token of selectedTokens) {
+    if (listingTokens.has(token)) matchedSelectedTokens += 1;
+  }
+  return matchedSelectedTokens / selectedTokens.size;
 }
 
 /**
@@ -107,6 +167,15 @@ export function verifyCatalogEquivalence(input: {
   if (sizeMatch === false)
     contradictions.push("Catalogue package size differs");
 
+  const selectedPackCount = explicitPackCount(catalogTitle(selected));
+  const listingPackCount = explicitPackCount(catalogTitle(listingProduct));
+  if (
+    (selectedPackCount !== null || listingPackCount !== null) &&
+    (selectedPackCount ?? 1) !== (listingPackCount ?? 1)
+  ) {
+    contradictions.push("Catalogue pack count differs");
+  }
+
   if (contradictions.length > 0) {
     return {
       status: "rejected",
@@ -137,42 +206,49 @@ export function verifyCatalogEquivalence(input: {
     selected.variant && listingProduct.variant
       ? jaccardSimilarity(selected.variant, listingProduct.variant)
       : null;
+  const selectedTitleCoverage = titleTokenCoverage({
+    selected,
+    listingProduct,
+    normalizedBrand: selectedBrand,
+  });
+  const titleEvidenceScore = Math.max(titleSimilarity, selectedTitleCoverage);
+  const strongTitleEvidence =
+    selectedTitleCoverage >= 0.8 || titleSimilarity >= 0.78;
+  const strongVariantEvidence =
+    variantSimilarity !== null &&
+    variantSimilarity >= 0.75 &&
+    selectedTitleCoverage >= 0.55;
   const presentationEvidence =
-    sizeMatch === true ||
-    (variantSimilarity !== null && variantSimilarity >= 0.75) ||
-    (!selected.size && !selected.variant && titleSimilarity >= 0.82);
+    (strongTitleEvidence && (sizeMatch === true || !selected.size)) ||
+    strongVariantEvidence;
   if (
     selectedHasIdentifier &&
     input.officialBrandStore &&
     brandMatch &&
-    presentationEvidence &&
-    titleSimilarity >= 0.4
+    presentationEvidence
   ) {
     return {
       status: "verified",
-      score: Math.min(0.94, 0.78 + titleSimilarity * 0.2),
+      score: Math.min(0.94, 0.78 + titleEvidenceScore * 0.16),
       contradictions: [],
       basis: "brand_store_bridge",
     };
   }
-  if (
-    input.officialBrandStore &&
-    brandMatch &&
-    presentationEvidence &&
-    titleSimilarity >= 0.4
-  ) {
+  if (input.officialBrandStore && brandMatch && presentationEvidence) {
     return {
       status: "verified",
-      score: Math.min(0.92, 0.76 + titleSimilarity * 0.18),
+      score: Math.min(0.92, 0.76 + titleEvidenceScore * 0.16),
       contradictions: [],
       basis: "official_brand_evidence",
     };
   }
   return {
     status: "likely",
-    score: Math.min(0.74, titleSimilarity),
+    score: Math.min(0.74, titleEvidenceScore),
     contradictions: [
-      "The merchant record is not linked by an exact identifier or official brand-store proof",
+      strongTitleEvidence
+        ? "The merchant record does not expose enough package or variant evidence"
+        : "The merchant title does not preserve enough of the verified product line",
     ],
     basis: "unproven",
   };

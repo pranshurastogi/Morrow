@@ -47,6 +47,12 @@ export type ScanStage =
   | "complete"
   | "error";
 
+interface DisplayError {
+  code: string;
+  message: string;
+  reference?: string;
+}
+
 interface State {
   stage: ScanStage;
   previewUrl: string | null;
@@ -62,10 +68,11 @@ interface State {
   sandboxSession: SandboxApprovalSession | null;
   sandboxResult: SandboxApprovalResult | null;
   sandboxIssue: PravaClientIssue | null;
+  sandboxStartError: DisplayError | null;
   sandboxRestarting: boolean;
   offerRefreshing: boolean;
   offerRefreshMessage: string | null;
-  error: { code: string; message: string } | null;
+  error: DisplayError | null;
 }
 
 type Action =
@@ -92,6 +99,10 @@ type Action =
     }
   | { type: "sandbox-payment"; session: SandboxApprovalSession }
   | { type: "sandbox-issue"; issue: PravaClientIssue }
+  | {
+      type: "sandbox-start-failed";
+      error: DisplayError;
+    }
   | { type: "sandbox-restarting"; restarting: boolean }
   | { type: "offer-refreshing" }
   | {
@@ -125,17 +136,26 @@ const initialState: State = {
   sandboxSession: null,
   sandboxResult: null,
   sandboxIssue: null,
+  sandboxStartError: null,
   sandboxRestarting: false,
   offerRefreshing: false,
   offerRefreshMessage: null,
   error: null,
 };
 
-function errorDetails(error: unknown): { code: string; message: string } {
+function errorDetails(error: unknown): DisplayError {
   if (error instanceof Error) {
+    const providerReference =
+      error instanceof ApiError &&
+      typeof error.details?.["responseId"] === "string"
+        ? error.details["responseId"]
+        : null;
+    const requestReference = error instanceof ApiError ? error.requestId : null;
+    const reference = providerReference ?? requestReference;
     return {
       code: "code" in error ? String(error.code) : "REQUEST_FAILED",
       message: error.message,
+      ...(reference ? { reference } : {}),
     };
   }
   return {
@@ -175,6 +195,7 @@ function reducer(state: State, action: Action): State {
         offers: action.offers,
         selectedOffer: action.selectedOffer,
         checkoutCapability: action.checkoutCapability,
+        sandboxStartError: null,
         offerRefreshing: false,
         offerRefreshMessage: null,
         error: null,
@@ -198,7 +219,11 @@ function reducer(state: State, action: Action): State {
         purchaseIntentId: action.purchaseIntentId,
       };
     case "select-offer":
-      return { ...state, selectedOffer: action.offer };
+      return {
+        ...state,
+        selectedOffer: action.offer,
+        sandboxStartError: null,
+      };
     case "payment":
       return { ...state, stage: "payment", paymentSession: action.session };
     case "payment-result":
@@ -217,6 +242,7 @@ function reducer(state: State, action: Action): State {
         sandboxSession: action.session,
         sandboxResult: null,
         sandboxIssue: null,
+        sandboxStartError: null,
         sandboxRestarting: false,
       };
     case "sandbox-issue":
@@ -225,8 +251,20 @@ function reducer(state: State, action: Action): State {
         sandboxIssue: action.issue,
         sandboxRestarting: false,
       };
+    case "sandbox-start-failed":
+      return {
+        ...state,
+        stage: "result",
+        sandboxStartError: action.error,
+        sandboxRestarting: false,
+        error: null,
+      };
     case "sandbox-restarting":
-      return { ...state, sandboxRestarting: action.restarting };
+      return {
+        ...state,
+        sandboxRestarting: action.restarting,
+        ...(action.restarting ? { sandboxStartError: null } : {}),
+      };
     case "offer-refreshing":
       return {
         ...state,
@@ -239,6 +277,7 @@ function reducer(state: State, action: Action): State {
         offers: action.offers,
         selectedOffer: action.selectedOffer,
         checkoutCapability: action.checkoutCapability,
+        sandboxStartError: null,
         offerRefreshing: false,
         offerRefreshMessage: action.message,
       };
@@ -570,7 +609,7 @@ export function useScanFlow() {
         });
         dispatch({ type: "sandbox-issue", issue });
       } else {
-        dispatch({ type: "error", error });
+        dispatch({ type: "sandbox-start-failed", error: errorDetails(error) });
       }
     } finally {
       sandboxSessionPending.current = false;

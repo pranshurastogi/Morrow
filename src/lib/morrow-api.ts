@@ -4,12 +4,22 @@ import { getAccessToken } from "@/features/auth/access-token";
 export class ApiError extends Error {
   readonly code: string;
   readonly retryable: boolean;
+  readonly requestId: string | null;
+  readonly details: Record<string, unknown> | null;
 
-  constructor(input: { code: string; message: string; retryable?: boolean }) {
+  constructor(input: {
+    code: string;
+    message: string;
+    retryable?: boolean;
+    requestId?: string;
+    details?: Record<string, unknown>;
+  }) {
     super(input.message);
     this.name = "ApiError";
     this.code = input.code;
     this.retryable = input.retryable ?? false;
+    this.requestId = input.requestId ?? null;
+    this.details = input.details ?? null;
   }
 }
 
@@ -71,7 +81,15 @@ export async function apiRequest<T>(
 
   const body = (await response.json().catch(() => null)) as
     | T
-    | { error?: { code?: string; message?: string; retryable?: boolean } }
+    | {
+        error?: {
+          code?: string;
+          message?: string;
+          retryable?: boolean;
+          requestId?: string;
+          details?: Record<string, unknown>;
+        };
+      }
     | null;
 
   if (!response.ok) {
@@ -86,6 +104,10 @@ export async function apiRequest<T>(
       ...(providerError?.retryable === undefined
         ? {}
         : { retryable: providerError.retryable }),
+      ...(providerError?.requestId
+        ? { requestId: providerError.requestId }
+        : {}),
+      ...(providerError?.details ? { details: providerError.details } : {}),
     });
   }
 

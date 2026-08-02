@@ -244,4 +244,78 @@ describe("merchant offer policy", () => {
       }).status,
     ).toBe("rejected");
   });
+
+  test("does not equate a same-brand same-size product from another line", () => {
+    const selected: CanonicalProductCandidate = {
+      ...product,
+      id: "mamaearth-vitamin-c",
+      brand: "Mamaearth",
+      name: "Mamaearth Vitamin C Face Wash with Vitamin C and Turmeric - 150 ml",
+      size: { value: 150, unit: "ml" },
+      gtin: null,
+    };
+    const ubtan: CanonicalProductCandidate = {
+      ...selected,
+      id: "mamaearth-ubtan",
+      name: "Ubtan Natural Glow Face Wash 150 ml",
+    };
+
+    const proof = verifyCatalogEquivalence({
+      selected,
+      listingProduct: ubtan,
+      officialBrandStore: true,
+    });
+
+    expect(proof.status).toBe("likely");
+    expect(proof.basis).toBe("unproven");
+  });
+
+  test("rejects a multipack when the verified product is a single unit", () => {
+    const selected: CanonicalProductCandidate = {
+      ...product,
+      id: "mamaearth-vitamin-c",
+      brand: "Mamaearth",
+      name: "Vitamin C Face Wash with Vitamin C and Turmeric - 150 ml",
+      size: { value: 150, unit: "ml" },
+      gtin: null,
+    };
+    const multipack: CanonicalProductCandidate = {
+      ...selected,
+      id: "mamaearth-vitamin-c-pack-two",
+      name: "Vitamin C Face Wash with Vitamin C and Turmeric 150 ml Pack of 2",
+    };
+
+    const proof = verifyCatalogEquivalence({
+      selected,
+      listingProduct: multipack,
+      officialBrandStore: true,
+    });
+
+    expect(proof.status).toBe("rejected");
+    expect(proof.contradictions).toContain("Catalogue pack count differs");
+  });
+
+  test("accepts the preserved product line and size from its official store", () => {
+    const selected: CanonicalProductCandidate = {
+      ...product,
+      id: "mamaearth-vitamin-c",
+      brand: "Mamaearth",
+      name: "Mamaearth Vitamin C Face Wash with Vitamin C and Turmeric - 150 ml",
+      size: { value: 150, unit: "ml" },
+      gtin: null,
+    };
+    const exactStorefrontProduct: CanonicalProductCandidate = {
+      ...selected,
+      id: "mamaearth-vitamin-c-storefront",
+      name: "Vitamin C Face Wash with Vitamin C & Turmeric, 150 ml",
+    };
+
+    expect(
+      verifyCatalogEquivalence({
+        selected,
+        listingProduct: exactStorefrontProduct,
+        officialBrandStore: true,
+      }).status,
+    ).toBe("verified");
+  });
 });

@@ -91,6 +91,7 @@ function AuthenticatedScanDesk() {
     sandboxSession,
     sandboxResult,
     sandboxIssue,
+    sandboxStartError,
     sandboxRestarting,
     offerRefreshing,
     offerRefreshMessage,
@@ -144,6 +145,8 @@ function AuthenticatedScanDesk() {
             onRefreshOffers={() => void actions.refreshMerchantOffers()}
             offerRefreshing={offerRefreshing}
             offerRefreshMessage={offerRefreshMessage}
+            sandboxStartError={sandboxStartError}
+            sandboxRestarting={sandboxRestarting}
             onReject={actions.reset}
           />
         )}

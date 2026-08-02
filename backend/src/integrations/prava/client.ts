@@ -89,19 +89,47 @@ export interface CreatePravaSessionInput {
 export class PravaApiError extends MorrowError {
   readonly upstreamStatus: number;
   readonly providerCode: string | null;
+  readonly responseId: string | null;
 
-  constructor(status: number, message: string, providerCode: string | null) {
+  constructor(
+    status: number,
+    message: string,
+    providerCode: string | null,
+    responseId: string | null,
+  ) {
+    const details = {
+      ...(providerCode ? { providerCode } : {}),
+      ...(responseId ? { responseId } : {}),
+    };
     super({
       code: status >= 500 ? "UPSTREAM_UNAVAILABLE" : "INVALID_REQUEST",
       message,
       statusCode: status >= 500 ? 502 : status,
       retryable: status >= 500 || status === 429,
-      ...(providerCode ? { details: { providerCode } } : {}),
+      ...(Object.keys(details).length > 0 ? { details } : {}),
     });
     this.name = "PravaApiError";
     this.upstreamStatus = status;
     this.providerCode = providerCode;
+    this.responseId = responseId;
   }
+}
+
+const RETRYABLE_SESSION_CREATION_STATUSES = new Set([500, 502, 503, 504]);
+
+export function shouldRetryPravaSessionCreation(
+  error: unknown,
+  attempt: number,
+): boolean {
+  return (
+    attempt === 0 &&
+    error instanceof PravaApiError &&
+    RETRYABLE_SESSION_CREATION_STATUSES.has(error.upstreamStatus)
+  );
+}
+
+function wait(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 async function pravaFetch(path: string, init: RequestInit): Promise<unknown> {
@@ -145,7 +173,12 @@ async function pravaFetch(path: string, init: RequestInit): Promise<unknown> {
       error && typeof error === "object" && "code" in error
         ? String(error.code)
         : null;
-    throw new PravaApiError(response.status, message, providerCode);
+    throw new PravaApiError(
+      response.status,
+      message,
+      providerCode,
+      response.headers.get("x-response-id"),
+    );
   }
   return body;
 }
@@ -153,7 +186,7 @@ async function pravaFetch(path: string, init: RequestInit): Promise<unknown> {
 export async function createPravaSession(
   input: CreatePravaSessionInput,
 ): Promise<PravaSession> {
-  const body = await pravaFetch("/v1/sessions", {
+  const request: RequestInit = {
     method: "POST",
     body: JSON.stringify({
       user_id: input.userId,
@@ -185,8 +218,21 @@ export async function createPravaSession(
         },
       ],
     }),
-  });
-  return sessionResponseSchema.parse(body);
+  };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const body = await pravaFetch("/v1/sessions", request);
+      return sessionResponseSchema.parse(body);
+    } catch (error) {
+      if (!shouldRetryPravaSessionCreation(error, attempt)) throw error;
+      // Session creation is permission setup, not a charge. Reusing the exact
+      // external order reference keeps Prava's duplicate detection effective.
+      await wait(500);
+    }
+  }
+
+  throw new Error("Prava session retry exhausted unexpectedly");
 }
 
 export async function getPravaPaymentResult(
