@@ -15,9 +15,9 @@ export function PravaInfrastructure() {
   return (
     <section id="prava" className="border-y border-border bg-card">
       <div className="mx-auto max-w-6xl px-4 py-14">
-        <SectionKicker index="06">Infrastructure</SectionKicker>
+        <SectionKicker index="05">Behind one tap</SectionKicker>
         <h2 className="mt-4 max-w-2xl text-balance text-3xl sm:text-4xl">
-          An agent that can act — with boundaries.
+          Simple in front. Strict underneath.
         </h2>
         <p className="mt-3 max-w-prose text-sm text-muted-foreground">
           Prava secures each payment within the boundary you approve.

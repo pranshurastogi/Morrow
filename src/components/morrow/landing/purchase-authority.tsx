@@ -38,10 +38,10 @@ export function PurchaseAuthority() {
     <section id="authority" className="mx-auto max-w-6xl px-4 py-14">
       <SectionKicker index="04">Bounded authority</SectionKicker>
       <h2 className="mt-4 max-w-2xl text-balance text-3xl sm:text-4xl">
-        Tell Morrow what it may do — not your card number.
+        Pay with a passkey. Permission stays small.
       </h2>
       <p className="mt-3 max-w-prose text-sm text-muted-foreground">
-        One item. One limit. One short-lived permission.
+        One exact item. One merchant. One limit. One short window.
       </p>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
@@ -67,11 +67,13 @@ export function PurchaseAuthority() {
             {approved ? (
               <div className="flex flex-col items-center gap-2 py-2">
                 <StatusStamp tone="verified" animate className="text-base">
-                  Secured
+                  Example secured
                 </StatusStamp>
-                <p className="font-display text-lg">It is on its way.</p>
+                <p className="font-display text-lg">
+                  One-order authority is ready.
+                </p>
                 <p className="font-mono text-[11px] text-muted-foreground">
-                  ORDER MOR-1907-1842 · ₹1,860 PAID · ARRIVING TOMORROW
+                  ILLUSTRATIVE · LIMIT ₹2,000 · EXPIRES IN 10 MINUTES
                 </p>
               </div>
             ) : (
@@ -81,7 +83,7 @@ export function PurchaseAuthority() {
                   onClick={() => setApproved(true)}
                 >
                   <Fingerprint className="mr-2 h-5 w-5" aria-hidden />
-                  Approve with passkey
+                  Preview bounded approval
                 </Button>
                 <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" aria-hidden />

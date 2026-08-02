@@ -20,7 +20,7 @@ export function SiteNav() {
         <Link
           to="/"
           className="brand-lockup group flex min-w-0 items-center gap-2.5"
-          aria-label="Morrow home"
+          aria-label="Merchant of Tomorrow home"
         >
           <span className="brand-seal grid h-10 w-10 shrink-0 place-items-center rounded-full border border-brass/50 bg-ivory">
             <img
@@ -32,8 +32,8 @@ export function SiteNav() {
             />
           </span>
           <span className="min-w-0">
-            <span className="block truncate font-display text-[1.35rem] leading-none">
-              Morrow
+            <span className="block truncate font-display text-[1.08rem] leading-none sm:text-[1.3rem]">
+              Merchant of Tomorrow
             </span>
             <span className="mt-1 hidden mono-caps text-muted-foreground sm:block">
               Mercantile Co. · Est. 1900

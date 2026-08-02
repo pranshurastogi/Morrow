@@ -79,13 +79,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       meta: [
         { charSet: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
-        { title: "Morrow — Visual commerce, made certain" },
+        { title: "Merchant of Tomorrow — Visual commerce, made certain" },
         {
           name: "description",
           content:
-            "Morrow identifies any object you show it, verifies the exact product, and completes the purchase through Prava within your approved limit.",
+            "Take one picture. Merchant of Tomorrow verifies the exact product and asks for your passkey before spending.",
         },
-        { name: "author", content: "Morrow Mercantile Co." },
+        { name: "author", content: "Merchant of Tomorrow" },
         { name: "theme-color", content: "#F3E9D3" },
       ],
       links: [

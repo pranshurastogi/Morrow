@@ -1,114 +1,129 @@
-import { useState } from "react";
-import { Slider } from "@/components/ui/slider";
-import { ArchiveNumber, Plate, SectionKicker } from "../bits";
+import { useEffect, useRef, useState } from "react";
+import { BookOpenText, Camera, Fingerprint } from "lucide-react";
+import { Plate, SectionKicker } from "../bits";
 
-const eraRows = [
-  { old: "Paper catalogue", now: "Phone camera" },
-  { old: "Order slip", now: "Verified match" },
-  { old: "Cash at the post office", now: "Prava-authorised payment" },
-  { old: "Railway route", now: "Delivery timeline" },
+const chapters = [
+  {
+    era: "1900",
+    icon: BookOpenText,
+    title: "Grandad points.",
+    body: "A clerk finds the page.",
+  },
+  {
+    era: "Today",
+    icon: Camera,
+    title: "Mum takes a picture.",
+    body: "No product name to remember.",
+  },
+  {
+    era: "Tomorrow",
+    icon: Fingerprint,
+    title: "One passkey approves it.",
+    body: "One exact item. One bounded payment.",
+  },
 ];
 
 export function EraTransform() {
-  const [value, setValue] = useState(35);
-  const modern = value / 100;
+  const sectionRef = useRef<HTMLElement>(null);
+  const played = useRef(false);
+  const [active, setActive] = useState(-1);
+
+  useEffect(() => {
+    const node = sectionRef.current;
+    if (!node) return;
+    const timeouts: number[] = [];
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting || played.current) return;
+        played.current = true;
+        observer.disconnect();
+
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          setActive(chapters.length - 1);
+          return;
+        }
+
+        chapters.forEach((_, index) => {
+          timeouts.push(window.setTimeout(() => setActive(index), index * 720));
+        });
+      },
+      { threshold: 0.35 },
+    );
+
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+    };
+  }, []);
 
   return (
-    <section id="era" className="border-y border-border bg-card">
-      <div className="mx-auto max-w-6xl px-4 py-14">
-        <SectionKicker index="01">1900 → tomorrow</SectionKicker>
-        <h2 className="mt-4 max-w-2xl text-balance text-3xl sm:text-4xl">
-          The desire never changed. The process finally did.
-        </h2>
-        <p className="mt-3 max-w-prose text-sm text-muted-foreground">
-          Drag the brass indicator through a century of checkout.
-        </p>
+    <section
+      ref={sectionRef}
+      id="era"
+      className="border-y border-border bg-card"
+    >
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:py-14">
+        <div className="grid gap-7 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-end">
+          <div>
+            <SectionKicker index="01">One family, one request</SectionKicker>
+            <h2 className="mt-4 max-w-xl text-balance text-3xl sm:text-4xl">
+              Same small ask. Three generations.
+            </h2>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+              Point to the thing. Merchant of Tomorrow handles the catalogue.
+            </p>
+          </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Plate className="p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <span
-                className="label-caps transition-opacity"
-                style={{ opacity: 1 - modern * 0.65 }}
-              >
-                Mercantile era
-              </span>
-              <span
-                className="label-caps text-primary transition-opacity"
-                style={{ opacity: 0.35 + modern * 0.65 }}
-              >
-                Morrow era
-              </span>
-            </div>
+          <Plate className="family-story overflow-hidden">
+            <ol className="family-story-rail grid sm:grid-cols-3">
+              {chapters.map((chapter, index) => {
+                const state =
+                  index < active
+                    ? "complete"
+                    : index === active
+                      ? "current"
+                      : "upcoming";
 
-            <div className="mt-4">
-              <Slider
-                value={[value]}
-                onValueChange={(next) => setValue(next[0] ?? 0)}
-                aria-label="Travel from 1900 to Morrow"
-                max={100}
-                step={1}
+                return (
+                  <li
+                    key={chapter.era}
+                    className="family-story-chapter"
+                    data-state={state}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActive(index)}
+                      className="family-story-button min-h-36 w-full p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                      aria-pressed={index === active}
+                    >
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="mono-caps text-brass">
+                          {chapter.era}
+                        </span>
+                        <span className="family-story-icon" aria-hidden="true">
+                          <chapter.icon className="h-5 w-5" />
+                        </span>
+                      </span>
+                      <span className="mt-7 block font-display text-xl leading-tight">
+                        {chapter.title}
+                      </span>
+                      <span className="mt-2 block text-sm text-muted-foreground">
+                        {chapter.body}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <div className="family-story-track" aria-hidden="true">
+              <span
+                className="family-story-progress"
+                style={{
+                  width: `${active < 0 ? 0 : ((active + 1) / chapters.length) * 100}%`,
+                }}
               />
-              <div className="mt-2 flex justify-between mono-caps text-muted-foreground">
-                <span>1900</span>
-                <span>1995</span>
-                <span>Morrow</span>
-              </div>
-            </div>
-
-            <ul className="mt-6 divide-y divide-border border-t border-border">
-              {eraRows.map((row) => (
-                <li
-                  key={row.old}
-                  className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 py-3"
-                >
-                  <span
-                    className="min-w-0 font-display text-[15px] transition-all"
-                    style={{
-                      opacity: 1 - modern * 0.75,
-                      filter: `saturate(${1 - modern})`,
-                    }}
-                  >
-                    {row.old}
-                  </span>
-                  <span className="mono-caps text-brass">→</span>
-                  <span
-                    className="min-w-0 text-right font-mono text-xs transition-all"
-                    style={{ opacity: 0.2 + modern * 0.8 }}
-                  >
-                    {row.now}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Plate>
-
-          <Plate className="flex flex-col justify-between gap-4 p-4">
-            <div>
-              <span className="label-caps text-muted-foreground">
-                Estimated wait
-              </span>
-              <p className="mt-2 font-display text-5xl leading-none">
-                {modern > 0.82
-                  ? "1 day"
-                  : modern > 0.55
-                    ? "4 days"
-                    : modern > 0.3
-                      ? "2 weeks"
-                      : "6–8 weeks"}
-              </p>
-              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                {modern > 0.82
-                  ? "Object shown once. Exact variant verified. Purchase approved within your limit."
-                  : modern > 0.55
-                    ? "Twelve keywords, fifteen tabs, and a checkout form that asks where you live for the fourth time."
-                    : modern > 0.3
-                      ? "Please remain on the line while the clerk searches the entire building."
-                      : "Estimated delivery: sometime before the next century."}
-              </p>
-            </div>
-            <div className="border-t border-border pt-3">
-              <ArchiveNumber value="LEDGER · MOR-1907-1842" />
             </div>
           </Plate>
         </div>

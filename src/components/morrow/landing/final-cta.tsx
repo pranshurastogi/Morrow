@@ -15,10 +15,10 @@ export function FinalCta() {
           className="mx-auto h-20 w-20"
         />
         <h2 className="mt-7 text-balance text-3xl sm:text-4xl">
-          Commerce has finally caught up with human language.
+          Take the picture. Leave the tabs behind.
         </h2>
         <p className="mx-auto mt-4 max-w-prose text-sm text-muted-foreground">
-          Show it. Verify it. Get it.
+          Merchant of Tomorrow will ask before it spends.
         </p>
         <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button size="lg" className="min-h-12 text-base" asChild>

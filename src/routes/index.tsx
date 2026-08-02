@@ -9,12 +9,11 @@ import {
   PurchaseAuthority,
   SimilarNotEnough,
   SiteFooter,
-  UseCases,
 } from "@/components/morrow/landing";
 
-const title = "Morrow — The buy button for the physical world";
+const title = "Merchant of Tomorrow — Show it. Verify it. Get it.";
 const description =
-  "Photograph anything. Morrow identifies it, verifies the exact version, compares trusted sellers, and completes the purchase through Prava within your approved limit.";
+  "Take one picture. Merchant of Tomorrow verifies the exact product, compares an orderable offer, and asks for your passkey before spending.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,15 +23,21 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: title },
       { property: "og:description", content: description },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "/og.png" },
+      {
+        property: "og:image",
+        content: "/merchant-of-tomorrow-og.jpg",
+      },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
       {
         property: "og:image:alt",
-        content: "Morrow — Show it. Verify it. Get it.",
+        content: "Merchant of Tomorrow — Show it. Verify it. Get it.",
       },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:image", content: "/og.png" },
+      {
+        name: "twitter:image",
+        content: "/merchant-of-tomorrow-og.jpg",
+      },
     ],
   }),
   component: Index,
@@ -48,7 +53,6 @@ function Index() {
         <LiveDemo />
         <SimilarNotEnough />
         <PurchaseAuthority />
-        <UseCases />
         <PravaInfrastructure />
         <FinalCta />
       </main>

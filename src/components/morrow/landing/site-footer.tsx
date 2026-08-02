@@ -5,14 +5,13 @@ export function SiteFooter() {
         <div className="grid gap-8 sm:grid-cols-[minmax(0,1.2fr)_auto] sm:items-end">
           <div>
             <p className="font-display text-2xl leading-tight">
-              Morrow Mercantile Co.
+              Merchant of Tomorrow
             </p>
             <p className="mt-2 text-sm italic text-muted-foreground">
-              Established approximately one century late.
+              The old mercantile promise, finally made simple.
             </p>
             <p className="mt-4 max-w-prose border-t border-border pt-4 font-mono text-[11px] leading-relaxed text-muted-foreground">
-              MORROW DOES NOT PURCHASE UNCERTAIN PRODUCTS WITHOUT USER
-              CONFIRMATION.
+              UNCERTAIN PRODUCTS ARE NEVER PURCHASED WITHOUT USER CONFIRMATION.
             </p>
           </div>
           <nav
